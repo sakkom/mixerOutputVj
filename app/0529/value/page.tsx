@@ -45,6 +45,7 @@ async function playAudio(
   const audioInput = (await navigator.mediaDevices.enumerateDevices())
     .filter((d) => d.kind == "audioinput")
     .find((d) => d.label.includes("Steinberg UR22mkII"));
+
   const stream = await navigator.mediaDevices.getUserMedia({
     audio: {
       deviceId: { exact: audioInput?.deviceId },
