@@ -4,6 +4,15 @@ import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import { monoVisual, stereoVisual } from "./output";
 
+interface WaveInteface {
+  texsBuffer: [
+    Float32Array<ArrayBuffer>,
+    Float32Array<ArrayBuffer>,
+    Float32Array<ArrayBuffer>,
+  ];
+  shaderAmp: number;
+}
+
 function createRenderer(canvas: HTMLCanvasElement) {
   const renderer = new THREE.WebGLRenderer({
     canvas: canvas,
@@ -11,60 +20,108 @@ function createRenderer(canvas: HTMLCanvasElement) {
     alpha: true,
   });
   renderer.autoClear = false;
-  renderer.setSize(window.innerWidth, window.innerHeight, false);
+  // renderer.setPixelRatio(window.devicePixelRatio);fps落ちる
+  renderer.setSize(window.innerWidth, window.innerHeight);
   return renderer;
+}
+
+function setObserver(
+  renderer: THREE.WebGLRenderer,
+  texsBuffer: [
+    Float32Array<ArrayBuffer>,
+    Float32Array<ArrayBuffer>,
+    Float32Array<ArrayBuffer>,
+  ],
+) {
+  const stereoVisualObserver = stereoVisual();
+  const monoVisualObserver = monoVisual();
+  stereoVisualObserver.init(renderer, [texsBuffer[0], texsBuffer[1]]);
+  monoVisualObserver.init(renderer, texsBuffer[2]);
+  return { stereoVisualObserver, monoVisualObserver };
 }
 
 export default function Page() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  // const [smooth, setSmooth] = useState();
-  // const [data, setData] = useState();
+  const waveParams = useRef<WaveInteface | null>(null);
+  const [isInit, setIsInit] = useState<boolean>(false);
 
-  // useEffect(() => {
-  //   const channel = new BroadcastChannel("mixerOutputVj");
-  //   channel.onmessage = (e) => {
-  //     console.log(e.data);
-  //     setSmooth(e.data.smooth);
-  //     setData(e.data.buffers);
-  //   };
-  //   return () => channel.close();
-  // }, []);
+  useEffect(() => {
+    const channel = new BroadcastChannel("mixerOutputVj");
+    channel.onmessage = (e) => {
+      waveParams.current = {
+        texsBuffer: e.data.buffers,
+        shaderAmp: e.data.shaderAmp,
+      };
+      if (!isInit) setIsInit(true);
+    };
+    return () => channel.close();
+  }, []);
 
   useEffect(() => {
     let aniId: number;
-    if (!canvasRef.current) return;
+    if (!canvasRef.current || !waveParams.current) return;
 
     const renderer = createRenderer(canvasRef.current);
-
-    const stereoVisualObserver = stereoVisual();
-    stereoVisualObserver.init(renderer);
-    const monoVisualObserver = monoVisual();
-    monoVisualObserver.init(renderer);
+    const { stereoVisualObserver, monoVisualObserver } = setObserver(
+      renderer,
+      waveParams.current?.texsBuffer,
+    );
 
     const clock = new THREE.Clock();
+    let lastTime = 0;
+    let frameCount = 0;
     const loop = () => {
-      stereoVisualObserver.update(clock.getElapsedTime(), renderer);
-      monoVisualObserver.update(clock.getElapsedTime(), renderer);
+      frameCount++;
+      const now = performance.now();
+      if (now - lastTime >= 1000) {
+        console.log(`FPS: ${frameCount}`);
+        frameCount = 0;
+        lastTime = now;
+      }
+      if (waveParams.current) {
+        stereoVisualObserver.update(
+          clock.getElapsedTime(),
+          renderer,
+          waveParams.current.shaderAmp,
+          [waveParams.current.texsBuffer[0], waveParams.current.texsBuffer[1]],
+        );
+        monoVisualObserver.update(
+          clock.getElapsedTime(),
+          renderer,
+          waveParams.current.shaderAmp,
+          waveParams.current.texsBuffer[2],
+        );
 
-      renderer.setRenderTarget(null);
-      renderer.clear();
-
-      stereoVisualObserver.render(renderer);
-      monoVisualObserver.render(renderer);
+        /*layer pattern */
+        renderer.setRenderTarget(null);
+        renderer.clear();
+        stereoVisualObserver.render(renderer);
+        monoVisualObserver.render(renderer);
+      }
 
       aniId = requestAnimationFrame(loop);
     };
     loop();
-    return () => cancelAnimationFrame(aniId);
-  }, []);
+    return () => {
+      cancelAnimationFrame(aniId);
+      renderer.dispose();
+    };
+  }, [isInit]);
 
   return (
-    <div style={{ margin: 0, padding: 0, backgroundColor: "black" }}>
+    <div
+      style={{
+        backgroundColor: "black",
+        width: "100vw",
+        height: "100vh",
+        overflow: "hidden",
+      }}
+    >
       {/*<h1>{smooth}</h1>*/}
       {/*<div style={{ wordBreak: "break-all" }}>
         <h1>{String(data)}</h1>
       </div>*/}
-      <div style={{ width: "100%" }}>
+      <div>
         <canvas ref={canvasRef} />
       </div>
     </div>

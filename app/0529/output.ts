@@ -1,114 +1,52 @@
 import * as THREE from "three";
-import { EffectComposer, RenderPass } from "three/examples/jsm/Addons.js";
-import { SketchShader, SketchShader1 } from "./shader";
-
-const PinpongShader = {
-  uniforms: {
-    tDiffuse: { value: null },
-    tPrev: { value: null },
-  },
-  vertexShader: `
-    varying vec2 vUv;
-    void main() {
-      vUv = uv;
-      gl_Position = vec4(position, 1.);
-    }
-  `,
-  fragmentShader: `
-    varying vec2 vUv;
-    uniform sampler2D tDiffuse;
-    uniform sampler2D tPrev;
-
-    float lumi(vec3 color) {
-      return dot(color, vec3(0.3, 0.59, 0.11));
-    }
-
-    void main() {
-      vec3 diffuse = texture2D(tDiffuse, vUv).rgb;
-      vec3 prev = texture2D(tPrev, vUv).rgb;
-
-      vec3 color = mix(diffuse, prev, 0.);
-
-      float alpha = step(0.2, lumi(color));
-
-      gl_FragColor = vec4(color, alpha);
-    }
-  `,
-};
-
-const createPinPong = (): EdgeInterface => {
-  const rtA = new THREE.WebGLRenderTarget(
-    window.innerWidth,
-    window.innerHeight,
-  );
-  const rtB = new THREE.WebGLRenderTarget(
-    window.innerWidth,
-    window.innerHeight,
-  );
-  const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
-  const scene = new THREE.Scene();
-  const mat = new THREE.ShaderMaterial({
-    uniforms: THREE.UniformsUtils.clone(PinpongShader.uniforms),
-    vertexShader: PinpongShader.vertexShader,
-    fragmentShader: PinpongShader.fragmentShader,
-    transparent: true,
-    depthTest: false,
-  });
-  const geo = new THREE.PlaneGeometry(2, 2);
-  scene.add(new THREE.Mesh(geo, mat));
-  return { camera, scene, mat, rts: [rtA, rtB], flip: false };
-};
-
-interface EdgeInterface {
-  camera: THREE.OrthographicCamera;
-  scene: THREE.Scene;
-  mat: THREE.ShaderMaterial;
-  rts: [THREE.WebGLRenderTarget, THREE.WebGLRenderTarget];
-  flip: boolean;
-}
+import { EffectComposer } from "three/examples/jsm/Addons.js";
+import { stereoShader, monoShader } from "./shader";
+import {
+  createComposer,
+  createPinPong,
+  createTex,
+  EdgeInterface,
+  output,
+  updateMonoTex,
+  updateStereoTex,
+} from "./utils/visual";
 
 export const stereoVisual = () => {
   let edge: EdgeInterface;
   let composer: EffectComposer;
+  let texs: [THREE.DataTexture, THREE.DataTexture];
 
   const uniforms = {
     uTime: { value: 0 },
+    uAudioTex: { value: [new THREE.DataTexture(), new THREE.DataTexture()] },
+    uShaderAmp: { value: 1 },
   };
 
-  const createComposer = (renderer: THREE.WebGLRenderer) => {
-    const composer = new EffectComposer(renderer);
-    const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
-    const scene = new THREE.Scene();
-    const mat = new THREE.ShaderMaterial({
-      uniforms,
-      ...SketchShader,
-    });
-    const geo = new THREE.PlaneGeometry(2, 2);
-    const mesh = new THREE.Mesh(geo, mat);
-    scene.add(mesh);
-    composer.addPass(new RenderPass(scene, camera));
-    return composer;
-  };
+  const init = (
+    renderer: THREE.WebGLRenderer,
+    stereoBuffer: [Float32Array<ArrayBuffer>, Float32Array<ArrayBuffer>],
+  ) => {
+    composer = createComposer(renderer, uniforms, stereoShader);
 
-  const init = (renderer: THREE.WebGLRenderer) => {
-    composer = createComposer(renderer);
     edge = createPinPong();
+    texs = stereoBuffer.map((buffer) => createTex(buffer)) as [
+      THREE.DataTexture,
+      THREE.DataTexture,
+    ];
+    uniforms.uAudioTex.value = texs;
   };
 
-  const update = (time: number, renderer: THREE.WebGLRenderer) => {
+  const update = (
+    time: number,
+    renderer: THREE.WebGLRenderer,
+    shaderAmp: number,
+    texsBuffer: [Float32Array<ArrayBuffer>, Float32Array<ArrayBuffer>],
+  ) => {
+    texs = updateStereoTex(texs, texsBuffer, uniforms.uAudioTex);
     uniforms.uTime.value = time;
-    const readBuffer = edge.flip ? edge.rts[0] : edge.rts[1];
-    const writeBuffer = edge.flip ? edge.rts[1] : edge.rts[0];
+    uniforms.uShaderAmp.value = shaderAmp;
 
-    composer.renderToScreen = false;
-    composer.render();
-
-    edge.mat.uniforms.tDiffuse.value = composer.readBuffer.texture;
-    edge.mat.uniforms.tPrev.value = readBuffer.texture;
-    renderer.setRenderTarget(writeBuffer);
-    renderer.render(edge.scene, edge.camera);
-
-    edge.flip = !edge.flip;
+    output(edge, composer, renderer);
   };
 
   const render = (renderer: THREE.WebGLRenderer) => {
@@ -121,45 +59,34 @@ export const stereoVisual = () => {
 export const monoVisual = () => {
   let edge: EdgeInterface;
   let composer: EffectComposer;
+  let tex: THREE.DataTexture;
 
   const uniforms = {
     uTime: { value: 0 },
+    uAudioTex: { value: new THREE.DataTexture() },
+    uShaderAmp: { value: 1 },
   };
 
-  const createComposer = (renderer: THREE.WebGLRenderer) => {
-    const composer = new EffectComposer(renderer);
-    const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
-    const scene = new THREE.Scene();
-    const mat = new THREE.ShaderMaterial({
-      uniforms,
-      ...SketchShader1,
-    });
-    const geo = new THREE.PlaneGeometry(2, 2);
-    const mesh = new THREE.Mesh(geo, mat);
-    scene.add(mesh);
-    composer.addPass(new RenderPass(scene, camera));
-    return composer;
-  };
-
-  const init = (renderer: THREE.WebGLRenderer) => {
-    composer = createComposer(renderer);
+  const init = (
+    renderer: THREE.WebGLRenderer,
+    monoBuffer: Float32Array<ArrayBuffer>,
+  ) => {
+    composer = createComposer(renderer, uniforms, monoShader);
     edge = createPinPong();
+    tex = createTex(monoBuffer);
+    uniforms.uAudioTex.value = tex;
   };
 
-  const update = (time: number, renderer: THREE.WebGLRenderer) => {
+  const update = (
+    time: number,
+    renderer: THREE.WebGLRenderer,
+    shaderAmp: number,
+    texBuffer: Float32Array<ArrayBuffer>,
+  ) => {
+    tex = updateMonoTex(tex, texBuffer, uniforms.uAudioTex);
     uniforms.uTime.value = time;
-    const readBuffer = edge.flip ? edge.rts[0] : edge.rts[1];
-    const writeBuffer = edge.flip ? edge.rts[1] : edge.rts[0];
-
-    composer.renderToScreen = false;
-    composer.render();
-
-    edge.mat.uniforms.tDiffuse.value = composer.readBuffer.texture;
-    edge.mat.uniforms.tPrev.value = readBuffer.texture;
-    renderer.setRenderTarget(writeBuffer);
-    renderer.render(edge.scene, edge.camera);
-
-    edge.flip = !edge.flip;
+    uniforms.uShaderAmp.value = shaderAmp;
+    output(edge, composer, renderer);
   };
 
   const render = (renderer: THREE.WebGLRenderer) => {

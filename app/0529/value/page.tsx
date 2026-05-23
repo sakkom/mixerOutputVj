@@ -257,7 +257,7 @@ export default function Page() {
 
       channel.postMessage({
         buffers: visualBufferRef.current.slice(),
-        smooth: useAudioValueStore.getState().smooth,
+        shaderAmp: useAudioValueStore.getState().shaderAmp,
       });
 
       animId = requestAnimationFrame(loop);
