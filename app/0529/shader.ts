@@ -11,24 +11,47 @@ export const monoShader = {
     varying vec2 vUv;
     uniform sampler2D uAudioTex;
     uniform float uTime;
-    uniform float uShaderAmp;
 
     float rand1(float y) {
       return fract(sin(y * 12.9898) * 43758.5453123);
     }
 
     void main() {
-      float bpmTime = (141. / 60.) * uTime;
       vec2 uv = vUv;
+      // uv.x = (uv.x - .5)*16./9. + .5;
 
-      float audio = (texture2D(uAudioTex, uv).r * uShaderAmp);
-      audio = clamp(audio, -1., 1.);
-      audio = audio * .5 + .5;
+      float isCircle = 0.;
+      float bold = .1;
 
-      float wave = abs((vUv.y) - audio);
-      wave = step(0.01, wave);
+      uv.x = mix(uv.x, (uv.x - .5)*16./9. + .5, isCircle);
+      uv = mix(uv, (uv-.5)*2.+.5, isCircle);
 
-      gl_FragColor = vec4(vec3(1.-wave), 1.);
+      // uv = fract(uv * 1.);
+      float a = atan(uv.y-.5, uv.x-.5);
+      a = (a + 3.14) / 6.28;
+      float dist = length(uv-.5);
+
+      float loop = 5.;
+      vec3 outputColor;
+
+      for(float i = 0.; i < loop; i++) {
+        vec2 sampleUv = vec2(i/loop + uv.x/loop, .5);
+        vec2 sampleUvAngle = vec2(i/loop + a/loop, .5);
+        vec2 mixUv = mix(sampleUv, sampleUvAngle, isCircle);
+        float audio = (texture2D(uAudioTex, mixUv).r * 1.);
+        audio = clamp(audio, -1., 1.);
+        audio = audio * .5 + .5;
+        audio = mix(audio, audio, isCircle);
+
+        float diffUv = uv.y; //kick反応させてみてもいいかも
+        float diff = mix(abs(diffUv - audio), abs(dist - audio), isCircle);
+        float edge = smoothstep(bold*.5 * (1.-i/loop), bold*(1.-i/loop), diff);
+        // float edge = step(.1 * (1.-i/loop), diff);
+        outputColor = vec3(abs(outputColor - vec3(edge)));
+      }
+
+      // outputColor *= vec3(1., 0., 0.);
+      gl_FragColor = vec4(outputColor, 1.);
     }
   `,
 };
@@ -46,34 +69,63 @@ export const stereoShader = {
     varying vec2 vUv;
     uniform sampler2D uAudioTex[2];
     uniform float uTime;
-    uniform float uShaderAmp;
 
     float rand1(float y) {
       return fract(sin(y * 12.9898) * 43758.5453123);
     }
 
     void main() {
-      float bpmTime = (141. / 60.) * uTime;
-      vec2 uv = vUv;
+    vec2 uv = vUv;
 
-      float audioL = (texture2D(uAudioTex[0], uv).r * uShaderAmp);
-      audioL = clamp(audioL, -1., 1.);
-      audioL = audioL * .5 + .5;
-      float audioR = (texture2D(uAudioTex[1], uv).r * uShaderAmp);
-      audioR = clamp(audioR, -1., 1.);
-      audioR = audioR * .5 + .5;
+    uv.x = (uv.x - .5)*4./3. + .5;
+    // uv = fract(uv * 1.);
+    float a = atan(uv.y-.5, uv.x-.5);
+    a = (a + 3.14) / 6.28;
+    float dist = length(uv-.5);
 
-      float waveL = abs((vUv.y) - audioL);
-      waveL = step(0.01, waveL);
-      vec3 lColor = (1.-waveL) * vec3(0., 0., 1.);
+    float loop = 6.;
+    vec3 outputColor;
+    vec3 outputColor0;
+    vec3 outputColor1;
 
-      float waveR = abs((vUv.y) - audioR);
-      waveR = step(0.01, waveR);
-      vec3 rColor = (1. - waveR) * vec3(1., 0., 0.);
+    for(float i = 0.; i < loop; i++) {
+      vec2 sampleUv = vec2(i/loop + uv.x/loop, .5);
+      vec2 sampleUvAngle = vec2(i/loop + a/loop, .5);
+      vec2 mixUv = mix(sampleUv, sampleUvAngle, 1.);
+      float audio = (texture2D(uAudioTex[0], mixUv).r * 1.);
+      audio = clamp(audio, -1., 1.);
+      audio = audio * .5 + .5;
+      audio = mix(audio, audio*.5, 1.0);
 
-      vec3 color = vec3(abs(rColor - lColor));
+      float diffUv = uv.y; //kick反応させてみてもいいかも
+      float diff = mix(abs(diffUv - audio), abs(dist - audio), 1.);
+      float edge = smoothstep(.1 * (1.-i/loop), .2*(1.-i/loop), diff);
+      // float edge = step(.1 * (1.-i/loop), diff);
+      outputColor0 = vec3(abs(outputColor0 - vec3(edge)));
+      // outputColor0 *= vec3(0., 1., 0.);
 
-      gl_FragColor = vec4(vec3((color)), 1.);
+    }
+
+    for(float i = 0.; i < loop; i++) {
+      vec2 sampleUv = vec2(i/loop + uv.x/loop, .5);
+      vec2 sampleUvAngle = vec2(i/loop + a/loop, .5);
+      vec2 mixUv = mix(sampleUv, sampleUvAngle, 1.);
+      float audio = (texture2D(uAudioTex[1], mixUv).r * 1.);
+      audio = clamp(audio, -1., 1.);
+      audio = audio * .5 + .5;
+      audio = mix(audio, audio*.5, 1.0);
+
+      float diffUv = uv.y; //kick反応させてみてもいいかも
+      float diff = mix(abs(diffUv - audio), abs(dist - audio), 1.);
+      float edge = smoothstep(.1 * (1.-i/loop), .2*(1.-i/loop), diff);
+      // float edge = step(.1 * (1.-i/loop), diff);
+      outputColor1 = vec3(abs(outputColor1 - vec3(edge)));
+      // outputColor1 *= vec3(1., 1., 0.);
+    }
+
+    outputColor = vec3(abs(outputColor0-outputColor1));
+
+    gl_FragColor = vec4(outputColor, 1.);
     }
   `,
 };
@@ -103,9 +155,19 @@ export const PinpongShader = {
       vec3 diffuse = texture2D(tDiffuse, vUv).rgb;
       vec3 prev = texture2D(tPrev, vUv).rgb;
 
-      vec3 color = mix(diffuse, prev, 0.);
+      float diffuseLumi = lumi(diffuse);
+      float prevLumi = lumi(prev);
 
-      float alpha = step(0.1, lumi(color));
+      float diff = length(abs(diffuse-prev));
+      diff = clamp(diff, 0., 0.95);
+
+      vec3 diffuseStep = step(.5, vec3(diffuse));
+      vec3 prevStep = step(.5, vec3(prev));
+
+      vec3 color = mix(diffuse, prev, 0.0);
+      // vec3 color = abs(diffuseStep-prevStep-diff);
+
+      float alpha = step(0.01, lumi(color));
 
       gl_FragColor = vec4(color, alpha);
     }

@@ -13,7 +13,6 @@ export const space0Shader = {
     varying vec2 vUv;
     uniform sampler2D uAudioTex[2];
     uniform float uTime;
-    uniform float uShaderAmp;
 
     float rand1(float y) {
       return fract(sin(y * 12.9898) * 43758.5453123);
@@ -23,10 +22,10 @@ export const space0Shader = {
       float bpmTime = (141. / 60.) * uTime;
       vec2 uv = vUv;
 
-      float audioL = (texture2D(uAudioTex[0], uv).r * uShaderAmp);
+      float audioL = (texture2D(uAudioTex[0], uv).r * 1.);
       audioL = clamp(audioL, -1., 1.);
       audioL = audioL * .5 + .5;
-      float audioR = (texture2D(uAudioTex[1], uv).r * uShaderAmp);
+      float audioR = (texture2D(uAudioTex[1], uv).r * 1.);
       audioR = clamp(audioR, -1., 1.);
       audioR = audioR * .5 + .5;
 
@@ -52,7 +51,6 @@ export const stereoScene = (scene: THREE.Scene) => {
   const uniforms = {
     uTime: { value: 0 },
     uAudioTex: { value: [new THREE.DataTexture(), new THREE.DataTexture()] },
-    uShaderAmp: { value: 1 },
   };
 
   const init = (audioTexStereo: THREE.DataTexture[]) => {
@@ -70,10 +68,9 @@ export const stereoScene = (scene: THREE.Scene) => {
     scene.add(group);
   };
 
-  const update = (shaderAmp: number, audioTexStereo?: THREE.DataTexture[]) => {
+  const update = (audioTexStereo?: THREE.DataTexture[]) => {
     t.update();
     uniforms.uTime.value = t.getElapsed();
-    uniforms.uShaderAmp.value = shaderAmp;
     if (audioTexStereo) {
       uniforms.uAudioTex.value = audioTexStereo;
     }

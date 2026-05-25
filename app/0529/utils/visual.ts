@@ -1,6 +1,11 @@
 import * as THREE from "three";
 import { PinpongShader } from "../shader";
-import { EffectComposer, RenderPass } from "three/examples/jsm/Addons.js";
+import {
+  EffectComposer,
+  RenderPass,
+  ShaderPass,
+} from "three/examples/jsm/Addons.js";
+import { Effector0 } from "../effector/effector0";
 
 export interface EdgeInterface {
   camera: THREE.OrthographicCamera;
@@ -112,6 +117,8 @@ export const createComposer = (
   const mesh = new THREE.Mesh(geo, mat);
   scene.add(mesh);
   composer.addPass(new RenderPass(scene, camera));
+  const pass0 = new ShaderPass(Effector0);
+  composer.addPass(pass0);
 
   return composer;
 };

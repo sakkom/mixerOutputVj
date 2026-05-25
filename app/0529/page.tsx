@@ -4,13 +4,12 @@ import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import { monoVisual, stereoVisual } from "./output";
 
-interface WaveInteface {
+interface waveParams {
   texsBuffer: [
     Float32Array<ArrayBuffer>,
     Float32Array<ArrayBuffer>,
     Float32Array<ArrayBuffer>,
   ];
-  shaderAmp: number;
 }
 
 function createRenderer(canvas: HTMLCanvasElement) {
@@ -42,7 +41,7 @@ function setObserver(
 
 export default function Page() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const waveParams = useRef<WaveInteface | null>(null);
+  const waveParams = useRef<waveParams | null>(null);
   const [isInit, setIsInit] = useState<boolean>(false);
 
   useEffect(() => {
@@ -50,7 +49,6 @@ export default function Page() {
     channel.onmessage = (e) => {
       waveParams.current = {
         texsBuffer: e.data.buffers,
-        shaderAmp: e.data.shaderAmp,
       };
       if (!isInit) setIsInit(true);
     };
@@ -70,6 +68,7 @@ export default function Page() {
     const clock = new THREE.Clock();
     let lastTime = 0;
     let frameCount = 0;
+    let counter = 0;
     const loop = () => {
       frameCount++;
       const now = performance.now();
@@ -79,27 +78,27 @@ export default function Page() {
         lastTime = now;
       }
       if (waveParams.current) {
-        stereoVisualObserver.update(
-          clock.getElapsedTime(),
-          renderer,
-          waveParams.current.shaderAmp,
-          [waveParams.current.texsBuffer[0], waveParams.current.texsBuffer[1]],
-        );
+        stereoVisualObserver.update(clock.getElapsedTime(), renderer, [
+          waveParams.current.texsBuffer[0],
+          waveParams.current.texsBuffer[1],
+        ]);
         monoVisualObserver.update(
           clock.getElapsedTime(),
           renderer,
-          waveParams.current.shaderAmp,
           waveParams.current.texsBuffer[2],
         );
 
         /*layer pattern */
-        renderer.setRenderTarget(null);
-        renderer.clear();
-        stereoVisualObserver.render(renderer);
-        monoVisualObserver.render(renderer);
+        if (counter % 1 === 0) {
+          renderer.setRenderTarget(null);
+          renderer.clear();
+          monoVisualObserver.render(renderer);
+          // stereoVisualObserver.render(renderer);
+        }
       }
 
       aniId = requestAnimationFrame(loop);
+      counter++;
     };
     loop();
     return () => {

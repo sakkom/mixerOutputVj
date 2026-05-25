@@ -7,12 +7,12 @@ interface AudioValueStore {
   updateSampleRate: (sampleRate: number) => void;
   fftSize: [number, number];
   updateFftSize: (ch: 0 | 1, fftSize: number) => void;
-  smooth: number;
-  updateSmooth: (smooth: number) => void;
+  smooths: [number, number];
+  updateSmooth: (smooths: [number, number]) => void;
   pmAverWindow: number;
   updatePmAverWindow: (widows: number) => void;
-  shaderAmp: number;
-  updateShaderAmp: (amp: number) => void;
+  amp: number;
+  updateAmp: (amp: number) => void;
 }
 
 export const useAudioValueStore = create<AudioValueStore>((set) => ({
@@ -27,10 +27,10 @@ export const useAudioValueStore = create<AudioValueStore>((set) => ({
       now[ch] = fftSize;
       return { fftSize: now };
     }),
-  smooth: 0,
-  updateSmooth: (smooth) => set({ smooth }),
+  smooths: [0.5, 0],
+  updateSmooth: (smooths) => set({ smooths }),
   pmAverWindow: 10,
   updatePmAverWindow: (widow) => set({ pmAverWindow: widow }),
-  shaderAmp: 1,
-  updateShaderAmp: (amp) => set({ shaderAmp: amp }),
+  amp: 1,
+  updateAmp: (amp) => set({ amp: amp }),
 }));

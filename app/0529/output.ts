@@ -18,8 +18,8 @@ export const stereoVisual = () => {
 
   const uniforms = {
     uTime: { value: 0 },
+    /*wave params */
     uAudioTex: { value: [new THREE.DataTexture(), new THREE.DataTexture()] },
-    uShaderAmp: { value: 1 },
   };
 
   const init = (
@@ -39,12 +39,10 @@ export const stereoVisual = () => {
   const update = (
     time: number,
     renderer: THREE.WebGLRenderer,
-    shaderAmp: number,
     texsBuffer: [Float32Array<ArrayBuffer>, Float32Array<ArrayBuffer>],
   ) => {
     texs = updateStereoTex(texs, texsBuffer, uniforms.uAudioTex);
     uniforms.uTime.value = time;
-    uniforms.uShaderAmp.value = shaderAmp;
 
     output(edge, composer, renderer);
   };
@@ -63,8 +61,8 @@ export const monoVisual = () => {
 
   const uniforms = {
     uTime: { value: 0 },
+    /*wave params */
     uAudioTex: { value: new THREE.DataTexture() },
-    uShaderAmp: { value: 1 },
   };
 
   const init = (
@@ -80,12 +78,10 @@ export const monoVisual = () => {
   const update = (
     time: number,
     renderer: THREE.WebGLRenderer,
-    shaderAmp: number,
     texBuffer: Float32Array<ArrayBuffer>,
   ) => {
     tex = updateMonoTex(tex, texBuffer, uniforms.uAudioTex);
     uniforms.uTime.value = time;
-    uniforms.uShaderAmp.value = shaderAmp;
     output(edge, composer, renderer);
   };
 
