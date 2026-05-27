@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import { monoVisual, stereoVisual } from "./output";
-import { SelectorVisualParams, VisualParams } from "./value/utils/interface";
+import { OutputVisualParams, VisualParams } from "./value/utils/interface";
 
 interface waveParams {
   texsBuffer: [
@@ -43,7 +43,7 @@ function setObserver(
 export default function Page() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const waveParams = useRef<waveParams | null>(null);
-  const visualParams = useRef<SelectorVisualParams | null>(null);
+  const visualParams = useRef<OutputVisualParams | null>(null);
   const [isInit, setIsInit] = useState<boolean>(false);
 
   useEffect(() => {
@@ -98,8 +98,18 @@ export default function Page() {
         if (counter % 6 === 0) {
           renderer.setRenderTarget(null);
           renderer.clear();
-          monoVisualObserver.render(renderer);
-          stereoVisualObserver.render(renderer);
+          const pattern = visualParams.current?.layer.pattern;
+          if (pattern === "sm") {
+            monoVisualObserver.render(renderer);
+            stereoVisualObserver.render(renderer);
+          } else if (pattern === "ms") {
+            stereoVisualObserver.render(renderer);
+            monoVisualObserver.render(renderer);
+          } else if (pattern === "s") {
+            stereoVisualObserver.render(renderer);
+          } else if (pattern === "m") {
+            monoVisualObserver.render(renderer);
+          }
         }
       }
 

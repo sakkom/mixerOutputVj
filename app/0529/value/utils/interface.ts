@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { Layer } from "../../store/visualParamsStore";
 
 export interface AudioRefProps {
   audioCtx: AudioContext;
@@ -21,9 +22,11 @@ export type AudioTexs = [
 export interface VisualParams {
   loopNum: number;
   bold: number;
+  alphas?: number[];
 }
 
-export interface SelectorVisualParams {
+export interface OutputVisualParams {
   stereo: VisualParams;
   mono: VisualParams;
+  layer: Layer;
 }

@@ -51,6 +51,7 @@ export const stereoVisual = () => {
     // console.log(visualParams);
     uniforms.uLoopNum.value = visualParams.loopNum;
     uniforms.uBold.value = visualParams.bold;
+    edge.mat.uniforms.uAlpha.value = visualParams.alphas![0];
     //
     output(edge, composer, renderer);
   };
@@ -97,7 +98,7 @@ export const monoVisual = () => {
     // console.log(visualParams);
     uniforms.uLoopNum.value = visualParams.loopNum;
     uniforms.uBold.value = visualParams.bold;
-    //
+    edge.mat.uniforms.uAlpha.value = visualParams.alphas![1];
     output(edge, composer, renderer);
   };
 

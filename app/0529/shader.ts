@@ -136,6 +136,7 @@ export const PinpongShader = {
   uniforms: {
     tDiffuse: { value: null },
     tPrev: { value: null },
+    uAlpha: { value: 0 },
   },
   vertexShader: `
     varying vec2 vUv;
@@ -148,6 +149,7 @@ export const PinpongShader = {
     varying vec2 vUv;
     uniform sampler2D tDiffuse;
     uniform sampler2D tPrev;
+    uniform float uAlpha;
 
     float lumi(vec3 color) {
       return dot(color, vec3(0.3, 0.59, 0.11));
@@ -171,7 +173,7 @@ export const PinpongShader = {
 
       float alpha = step(0.01, lumi(color));
 
-      gl_FragColor = vec4(color, alpha);
+      gl_FragColor = vec4(color, alpha * uAlpha);
     }
   `,
 };

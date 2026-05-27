@@ -21,11 +21,15 @@ import {
 import {
   AudioRefProps,
   AudioTexs,
-  SelectorVisualParams,
+  OutputVisualParams,
   ThreeFloat32Array,
   VisualParams,
 } from "./utils/interface";
-import { useVisualParamsStore } from "../store/visualParamsStore";
+import {
+  Layer,
+  LayerPattern,
+  useVisualParamsStore,
+} from "../store/visualParamsStore";
 
 function waveProcessor(
   audioRef: AudioRefProps,
@@ -110,12 +114,14 @@ export default function Page() {
   const stereo = useVisualParamsStore((s) => s.stereo);
   const mono = useVisualParamsStore((s) => s.mono);
   const selector = useVisualParamsStore((s) => s.selector);
-  const visualParams: SelectorVisualParams = { stereo, mono };
+  const layer = useVisualParamsStore((s) => s.layer);
+  const visualParams: OutputVisualParams = { stereo, mono, layer };
 
   /*midi */
   const midiOutputRef = useRef<MIDIOutput | null>(null);
   const midiInputRef = useRef<MIDIInput | null>(null);
   const selectorRef = useRef<Set<"s" | "m">>(new Set());
+  const layerRef = useRef<Set<"s" | "m" | "r">>(new Set());
   const zrcRef = useRef<number>(0);
 
   useEffect(() => {}, []);
@@ -255,11 +261,49 @@ export default function Page() {
             midiOutputRef.current?.send([176, 92, n > 0 ? 127 : 0]);
           },
         };
+        function getLayer(n: number, s: "s" | "m" | "r") {
+          n > 0 ? layerRef.current.add(s) : layerRef.current.delete(s);
+          const has = (key: "s" | "m" | "r") => layerRef.current.has(key);
+          let pattern: LayerPattern;
+          if (has("s") && has("m") && has("r")) pattern = "ms";
+          else if (has("s") && has("m")) pattern = "sm";
+          else if (has("s")) pattern = "s";
+          else if (has("m")) pattern = "m";
+          else pattern = null;
+          const alpha = Number(n.toFixed(2));
+          const alphas = useVisualParamsStore.getState().layer.alphas;
+          const newAlphas =
+            s === "s"
+              ? [alpha, alphas[1]]
+              : s === "m"
+                ? [alphas[0], alpha]
+                : alphas;
+          useVisualParamsStore
+            .getState()
+            .updateLayer({ pattern, alphas: newAlphas });
+        }
+        //sliderでα同期してもいいかも
+        const layerCcMap: Record<number, (norm: number) => void> = {
+          //stereo
+          6: (n) => {
+            getLayer(n, "s");
+          },
+          //mono
+          7: (n) => {
+            getLayer(n, "m");
+          },
+          //reverse
+          90: (n) => {
+            getLayer(n, "r");
+            midiOutputRef.current?.send([176, 90, n > 0 ? 127 : 0]);
+          },
+        };
 
         //ボタンも変える？[0, 1][0,127]
         const norm = value / 127;
         waveCcMap[cc]?.(norm);
         visualCcMap[cc]?.(norm);
+        layerCcMap[cc]?.(norm);
       };
     }
 
@@ -338,12 +382,18 @@ export default function Page() {
       renderer.render(scene1, camera);
 
       const vS = useVisualParamsStore.getState();
-      const visualParams: SelectorVisualParams = {
-        stereo: { loopNum: vS.stereo.loopNum, bold: vS.stereo.bold },
+      const visualParams: OutputVisualParams = {
+        stereo: {
+          loopNum: vS.stereo.loopNum,
+          bold: vS.stereo.bold,
+          alphas: vS.layer.alphas,
+        },
         mono: {
           loopNum: vS.mono.loopNum,
           bold: vS.mono.bold,
+          alphas: vS.layer.alphas,
         },
+        layer: vS.layer,
       };
       channel.postMessage({
         buffers: outputBufferRef.current.slice(),
@@ -495,6 +545,7 @@ export default function Page() {
       <div style={{ backgroundColor: "black", color: "white" }}>
         <h1>visual params</h1>
         <h2>selector: {selector}</h2>
+        <h2>{JSON.stringify(layer)}</h2>
         <div>
           <div>stereo</div>
           <h2>{JSON.stringify(stereo)}</h2>

@@ -2,6 +2,12 @@ import { create } from "zustand";
 import { VisualParams } from "../value/utils/interface";
 
 type Selector = "s" | "m" | "sm" | null;
+export type LayerPattern = "s" | "m" | "sm" | "ms" | null;
+
+export interface Layer {
+  pattern: LayerPattern;
+  alphas: number[];
+}
 
 interface VisualParamsStore {
   stereo: VisualParams;
@@ -9,7 +15,9 @@ interface VisualParamsStore {
   mono: VisualParams;
   updateMono: (value: VisualParams) => void;
   selector: Selector;
-  updateSelector: (status: Selector) => void;
+  updateSelector: (selector: Selector) => void;
+  layer: Layer;
+  updateLayer: (layer: Layer) => void;
 }
 
 export const useVisualParamsStore = create<VisualParamsStore>((set) => ({
@@ -18,5 +26,7 @@ export const useVisualParamsStore = create<VisualParamsStore>((set) => ({
   mono: { loopNum: 1, bold: 0.005 },
   updateMono: (value) => set({ mono: value }),
   selector: null,
-  updateSelector: (status) => set({ selector: status }),
+  updateSelector: (selector) => set({ selector }),
+  layer: { pattern: null, alphas: [0, 0] },
+  updateLayer: (layer) => set({ layer }),
 }));
