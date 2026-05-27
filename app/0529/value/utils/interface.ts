@@ -17,3 +17,13 @@ export type AudioTexs = [
   THREE.DataTexture | null,
   THREE.DataTexture | null,
 ];
+
+export interface VisualParams {
+  loopNum: number;
+  bold: number;
+}
+
+export interface SelectorVisualParams {
+  stereo: VisualParams;
+  mono: VisualParams;
+}

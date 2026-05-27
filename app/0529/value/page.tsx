@@ -18,7 +18,14 @@ import {
   setThree,
   updateCanvas,
 } from "./utils/three";
-import { AudioRefProps, AudioTexs, ThreeFloat32Array } from "./utils/interface";
+import {
+  AudioRefProps,
+  AudioTexs,
+  SelectorVisualParams,
+  ThreeFloat32Array,
+  VisualParams,
+} from "./utils/interface";
+import { useVisualParamsStore } from "../store/visualParamsStore";
 
 function waveProcessor(
   audioRef: AudioRefProps,
@@ -100,12 +107,167 @@ export default function Page() {
 
   const bpm = useAudioValueStore((s) => s.bpm);
 
+  const stereo = useVisualParamsStore((s) => s.stereo);
+  const mono = useVisualParamsStore((s) => s.mono);
+  const selector = useVisualParamsStore((s) => s.selector);
+  const visualParams: SelectorVisualParams = { stereo, mono };
+
+  /*midi */
+  const midiOutputRef = useRef<MIDIOutput | null>(null);
+  const midiInputRef = useRef<MIDIInput | null>(null);
+  const selectorRef = useRef<Set<"s" | "m">>(new Set());
+  const zrcRef = useRef<number>(0);
+
+  useEffect(() => {}, []);
+
+  const handleFftSizeChange = (fftSize: number, ch: 0 | 1) => {
+    if (!audioRef.current) return;
+    audioRef.current.analyser[ch].fftSize = fftSize;
+    audioRef.current.buffer[ch] = new Float32Array(fftSize);
+    visualBufferRef.current[ch] = new Float32Array(fftSize);
+    outputBufferRef.current[ch] = new Float32Array(fftSize);
+    const maxSize = Math.max(
+      visualBufferRef.current[0].length,
+      visualBufferRef.current[1].length,
+    );
+    visualBufferRef.current[2] = new Float32Array(maxSize);
+    outputBufferRef.current[2] = new Float32Array(maxSize);
+    audioTexsRef.current[ch]?.dispose();
+    audioTexsRef.current[ch] = createTex(outputBufferRef.current[ch]);
+    audioTexsRef.current[2]?.dispose();
+    audioTexsRef.current[2] = createTex(outputBufferRef.current[2]);
+    useAudioValueStore.getState().updateFftSize(ch, fftSize);
+  };
   useEffect(() => {
     const handleClick = async () => {
       audioRef.current = await playAudio(44100, fftSize);
       setIsInit(true);
     };
     window.addEventListener("click", handleClick, { once: true });
+
+    function onMIDISuccess(midiAccess: MIDIAccess) {
+      const output =
+        [...midiAccess.outputs.values()].find((o) =>
+          o.name?.includes("nanoKONTROL2"),
+        ) ?? null;
+      midiOutputRef.current = output;
+      const input =
+        [...midiAccess.inputs.values()].find((o) =>
+          o.name?.includes("nanoKONTROL2"),
+        ) ?? null;
+      midiInputRef.current = input;
+
+      if (!midiInputRef.current) return;
+      midiInputRef.current.onmidimessage = (e) => {
+        if (!e.data) return;
+        const [status, cc, value] = e.data;
+
+        const waveCcRange = {
+          amp: 1000,
+          windows: 150,
+        };
+        const waveCcMap: Record<number, (norm: number) => void> = {
+          0: (n) => {
+            const tmp = Math.max(n * 1000, 1).toFixed(3);
+            const amp = Number(tmp);
+            useAudioValueStore.getState().updateAmp(amp);
+          },
+          1: (n) => {
+            n = Number(n.toFixed(3));
+            const s = useAudioValueStore.getState();
+            s.updateSmooth([n, s.smooths[1]]);
+          },
+          2: (n) => {
+            n = Number(n.toFixed(3));
+            const s = useAudioValueStore.getState();
+            s.updateSmooth([s.smooths[0], n]);
+          },
+          10: (n) => {
+            const arr = [32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384];
+            const i = Math.floor(n * (arr.length - 1));
+            const fftSize = arr[i];
+            handleFftSizeChange(fftSize, 0);
+            useAudioValueStore.getState().updateFftSize(0, fftSize);
+          },
+          11: (n) => {
+            const arr = [32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384];
+            const i = Math.floor(n * (arr.length - 1));
+            const fftSize = arr[i];
+            handleFftSizeChange(fftSize, 1);
+            useAudioValueStore.getState().updateFftSize(1, fftSize);
+          },
+          12: (n) => {
+            n = Math.max(Math.round(n * 150), 1);
+            useAudioValueStore.getState().updatePmAverWindow(n);
+          },
+        };
+
+        const visualCcRange = {
+          loopNum: 10,
+          bold: 0.5,
+        };
+        const visualCcMap: Record<number, (norm: number) => void> = {
+          13: (n) => {
+            const loopNum = Math.max(Math.floor(n * visualCcRange.loopNum), 1);
+            const s = useVisualParamsStore.getState();
+            const sel = selectorRef.current;
+            if (sel.has("s")) s.updateStereo({ loopNum, bold: s.stereo.bold });
+            if (sel.has("m")) s.updateMono({ loopNum, bold: s.mono.bold });
+          },
+          14: (n) => {
+            const bold = Number(
+              Math.max(n * visualCcRange.bold, 0.005).toFixed(3),
+            );
+            const s = useVisualParamsStore.getState();
+            const sel = selectorRef.current;
+            if (sel.has("s"))
+              s.updateStereo({ loopNum: s.stereo.loopNum, bold });
+            if (sel.has("m")) s.updateMono({ loopNum: s.mono.loopNum, bold });
+          },
+          91: (n) => {
+            n > 0
+              ? selectorRef.current.add("m")
+              : selectorRef.current.delete("m");
+            const status =
+              selectorRef.current.has("s") && selectorRef.current.has("m")
+                ? "sm"
+                : selectorRef.current.has("m")
+                  ? "m"
+                  : selectorRef.current.has("s")
+                    ? "s"
+                    : null;
+            useVisualParamsStore.getState().updateSelector(status);
+            midiOutputRef.current?.send([176, 91, n > 0 ? 127 : 0]);
+          },
+          92: (n) => {
+            n > 0
+              ? selectorRef.current.add("s")
+              : selectorRef.current.delete("s");
+            const status =
+              selectorRef.current.has("s") && selectorRef.current.has("m")
+                ? "sm"
+                : selectorRef.current.has("m")
+                  ? "m"
+                  : selectorRef.current.has("s")
+                    ? "s"
+                    : null;
+            useVisualParamsStore.getState().updateSelector(status);
+            midiOutputRef.current?.send([176, 92, n > 0 ? 127 : 0]);
+          },
+        };
+
+        //ボタンも変える？[0, 1][0,127]
+        const norm = value / 127;
+        waveCcMap[cc]?.(norm);
+        visualCcMap[cc]?.(norm);
+      };
+    }
+
+    const loop = () => {
+      requestAnimationFrame(loop);
+    };
+    loop();
+    window.navigator.requestMIDIAccess().then(onMIDISuccess);
   }, []);
 
   useEffect(() => {
@@ -175,8 +337,17 @@ export default function Page() {
       renderer.setScissor(W, 0, W, H);
       renderer.render(scene1, camera);
 
+      const vS = useVisualParamsStore.getState();
+      const visualParams: SelectorVisualParams = {
+        stereo: { loopNum: vS.stereo.loopNum, bold: vS.stereo.bold },
+        mono: {
+          loopNum: vS.mono.loopNum,
+          bold: vS.mono.bold,
+        },
+      };
       channel.postMessage({
         buffers: outputBufferRef.current.slice(),
+        visualParams,
       });
 
       animId = requestAnimationFrame(loop);
@@ -189,29 +360,6 @@ export default function Page() {
       channel.close();
     };
   }, [isInit]);
-
-  const handleFftSizeChange = (
-    e: React.ChangeEvent<HTMLSelectElement>,
-    ch: 0 | 1,
-  ) => {
-    if (!audioRef.current) return;
-    const fftSize = Number(e.target.value);
-    audioRef.current.analyser[ch].fftSize = fftSize;
-    audioRef.current.buffer[ch] = new Float32Array(fftSize);
-    visualBufferRef.current[ch] = new Float32Array(fftSize);
-    outputBufferRef.current[ch] = new Float32Array(fftSize);
-    const maxSize = Math.max(
-      visualBufferRef.current[0].length,
-      visualBufferRef.current[1].length,
-    );
-    visualBufferRef.current[2] = new Float32Array(maxSize);
-    outputBufferRef.current[2] = new Float32Array(maxSize);
-    audioTexsRef.current[ch]?.dispose();
-    audioTexsRef.current[ch] = createTex(outputBufferRef.current[ch]);
-    audioTexsRef.current[2]?.dispose();
-    audioTexsRef.current[2] = createTex(outputBufferRef.current[2]);
-    useAudioValueStore.getState().updateFftSize(ch, fftSize);
-  };
 
   const handleSampleRateChange = async (
     e: React.ChangeEvent<HTMLInputElement>,
@@ -249,7 +397,7 @@ export default function Page() {
           <div>left</div>
           <select
             value={fftSize[0]}
-            onChange={(e) => handleFftSizeChange(e, 0)}
+            onChange={(e) => handleFftSizeChange(Number(e.target.value), 0)}
           >
             {[32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384].map(
               (v, i) => (
@@ -265,7 +413,7 @@ export default function Page() {
           <div>right</div>
           <select
             value={fftSize[1]}
-            onChange={(e) => handleFftSizeChange(e, 1)}
+            onChange={(e) => handleFftSizeChange(Number(e.target.value), 1)}
           >
             {[32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384].map(
               (v, i) => (
@@ -343,6 +491,18 @@ export default function Page() {
           }
         />
         <div>{amp}</div>
+      </div>
+      <div style={{ backgroundColor: "black", color: "white" }}>
+        <h1>visual params</h1>
+        <h2>selector: {selector}</h2>
+        <div>
+          <div>stereo</div>
+          <h2>{JSON.stringify(stereo)}</h2>
+        </div>
+        <div>
+          <div>mono</div>
+          <h2>{JSON.stringify(mono)}</h2>
+        </div>
       </div>
     </div>
   );

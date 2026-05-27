@@ -10,6 +10,7 @@ import {
   updateMonoTex,
   updateStereoTex,
 } from "./utils/visual";
+import { VisualParams } from "./value/utils/interface";
 
 export const stereoVisual = () => {
   let edge: EdgeInterface;
@@ -20,6 +21,8 @@ export const stereoVisual = () => {
     uTime: { value: 0 },
     /*wave params */
     uAudioTex: { value: [new THREE.DataTexture(), new THREE.DataTexture()] },
+    uLoopNum: { value: 1 },
+    uBold: { value: 0.005 },
   };
 
   const init = (
@@ -40,10 +43,15 @@ export const stereoVisual = () => {
     time: number,
     renderer: THREE.WebGLRenderer,
     texsBuffer: [Float32Array<ArrayBuffer>, Float32Array<ArrayBuffer>],
+    visualParams: VisualParams,
   ) => {
     texs = updateStereoTex(texs, texsBuffer, uniforms.uAudioTex);
     uniforms.uTime.value = time;
-
+    //
+    // console.log(visualParams);
+    uniforms.uLoopNum.value = visualParams.loopNum;
+    uniforms.uBold.value = visualParams.bold;
+    //
     output(edge, composer, renderer);
   };
 
@@ -63,6 +71,8 @@ export const monoVisual = () => {
     uTime: { value: 0 },
     /*wave params */
     uAudioTex: { value: new THREE.DataTexture() },
+    uLoopNum: { value: 1 },
+    uBold: { value: 0.005 },
   };
 
   const init = (
@@ -79,9 +89,15 @@ export const monoVisual = () => {
     time: number,
     renderer: THREE.WebGLRenderer,
     texBuffer: Float32Array<ArrayBuffer>,
+    visualParams: VisualParams,
   ) => {
     tex = updateMonoTex(tex, texBuffer, uniforms.uAudioTex);
     uniforms.uTime.value = time;
+    //
+    // console.log(visualParams);
+    uniforms.uLoopNum.value = visualParams.loopNum;
+    uniforms.uBold.value = visualParams.bold;
+    //
     output(edge, composer, renderer);
   };
 

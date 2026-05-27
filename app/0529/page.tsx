@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import { monoVisual, stereoVisual } from "./output";
+import { SelectorVisualParams, VisualParams } from "./value/utils/interface";
 
 interface waveParams {
   texsBuffer: [
@@ -42,6 +43,7 @@ function setObserver(
 export default function Page() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const waveParams = useRef<waveParams | null>(null);
+  const visualParams = useRef<SelectorVisualParams | null>(null);
   const [isInit, setIsInit] = useState<boolean>(false);
 
   useEffect(() => {
@@ -50,6 +52,7 @@ export default function Page() {
       waveParams.current = {
         texsBuffer: e.data.buffers,
       };
+      visualParams.current = e.data.visualParams;
       if (!isInit) setIsInit(true);
     };
     return () => channel.close();
@@ -78,22 +81,25 @@ export default function Page() {
         lastTime = now;
       }
       if (waveParams.current) {
-        stereoVisualObserver.update(clock.getElapsedTime(), renderer, [
-          waveParams.current.texsBuffer[0],
-          waveParams.current.texsBuffer[1],
-        ]);
+        stereoVisualObserver.update(
+          clock.getElapsedTime(),
+          renderer,
+          [waveParams.current.texsBuffer[0], waveParams.current.texsBuffer[1]],
+          visualParams.current!.stereo,
+        );
         monoVisualObserver.update(
           clock.getElapsedTime(),
           renderer,
           waveParams.current.texsBuffer[2],
+          visualParams.current!.mono,
         );
 
         /*layer pattern */
-        if (counter % 1 === 0) {
+        if (counter % 6 === 0) {
           renderer.setRenderTarget(null);
           renderer.clear();
           monoVisualObserver.render(renderer);
-          // stereoVisualObserver.render(renderer);
+          stereoVisualObserver.render(renderer);
         }
       }
 
