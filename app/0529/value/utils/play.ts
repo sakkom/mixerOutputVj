@@ -5,7 +5,6 @@ export async function playAudio(
   fftSize: [number, number],
 ): Promise<AudioRefProps> {
   const audioCtx = new AudioContext({ sampleRate }); //[3000, 768000]
-  console.log(audioCtx.sampleRate);
   const analyserL = audioCtx.createAnalyser();
   const analyserR = audioCtx.createAnalyser();
   analyserL.fftSize = fftSize[0];

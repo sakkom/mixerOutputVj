@@ -6,9 +6,10 @@ import {
   ShaderPass,
 } from "three/examples/jsm/Addons.js";
 import { Effector0 } from "../effector/effector0";
+import { CircleMove } from "../effector/circleMove";
 
 export interface EdgeInterface {
-  camera: THREE.OrthographicCamera;
+  camera: THREE.PerspectiveCamera;
   scene: THREE.Scene;
   mat: THREE.ShaderMaterial;
   rts: [THREE.WebGLRenderTarget, THREE.WebGLRenderTarget];
@@ -24,7 +25,10 @@ export const createPinPong = (): EdgeInterface => {
     window.innerWidth,
     window.innerHeight,
   );
-  const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+  // const camera = new THREE.PerspectiveCamera(-1, 1, 1, -1, 0, 1);
+  const camera = new THREE.PerspectiveCamera(45, 1 / 1, 0.1, 100);
+  camera.position.z = 1 / Math.tan(THREE.MathUtils.degToRad(45 / 2));
+
   const scene = new THREE.Scene();
   const mat = new THREE.ShaderMaterial({
     uniforms: THREE.UniformsUtils.clone(PinpongShader.uniforms),
@@ -33,7 +37,7 @@ export const createPinPong = (): EdgeInterface => {
     transparent: true,
     depthTest: false,
   });
-  const geo = new THREE.PlaneGeometry(2, 2);
+  const geo = new THREE.PlaneGeometry(2, 2, 32, 32);
   scene.add(new THREE.Mesh(geo, mat));
   return { camera, scene, mat, rts: [rtA, rtB], flip: false };
 };
@@ -107,18 +111,24 @@ export const createComposer = (
   shader: { vertexShader: string; fragmentShader: string },
 ) => {
   const composer = new EffectComposer(renderer);
-  const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+  // const camera = new THREE.PerspectiveCamera(-1, 1, 1, -1, 0, 1);
+  const camera = new THREE.PerspectiveCamera(45, 1 / 1, 0.1, 100);
+  camera.position.z = 1 / Math.tan(THREE.MathUtils.degToRad(45 / 2));
   const scene = new THREE.Scene();
   const mat = new THREE.ShaderMaterial({
     uniforms,
     ...shader,
+    // wireframe: true,
+    side: THREE.DoubleSide,
   });
-  const geo = new THREE.PlaneGeometry(2, 2);
+  const geo = new THREE.PlaneGeometry(2, 2, 500, 500);
   const mesh = new THREE.Mesh(geo, mat);
   scene.add(mesh);
   composer.addPass(new RenderPass(scene, camera));
   const pass0 = new ShaderPass(Effector0);
   composer.addPass(pass0);
+  const circleMovePass = new ShaderPass(CircleMove);
+  // composer.addPass(circleMovePass);
 
-  return composer;
+  return { composer, circleMovePass };
 };

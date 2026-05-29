@@ -92,6 +92,9 @@ export default function Page() {
           renderer,
           waveParams.current.texsBuffer[2],
           visualParams.current!.mono,
+          visualParams.current!.bpmKick,
+          visualParams.current!.birdsEye,
+          visualParams.current!.bpm,
         );
 
         /*layer pattern */

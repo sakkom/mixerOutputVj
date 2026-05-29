@@ -1,10 +1,19 @@
 import * as THREE from "three";
 import { Layer } from "../../store/visualParamsStore";
+import { BirdsEyeProps } from "../../store/birdsEyeStore";
 
 export interface AudioRefProps {
   audioCtx: AudioContext;
   analyser: [AnalyserNode, AnalyserNode];
   buffer: [Float32Array<ArrayBuffer>, Float32Array<ArrayBuffer>];
+}
+
+export interface OriginAudioRefProps {
+  audioCtx: AudioContext;
+  analyser: AnalyserNode;
+  domainBuffer: Float32Array<ArrayBuffer>;
+  fftBuffer: Uint8Array<ArrayBuffer>;
+  gain: number;
 }
 
 export type ThreeFloat32Array = [
@@ -29,4 +38,7 @@ export interface OutputVisualParams {
   stereo: VisualParams;
   mono: VisualParams;
   layer: Layer;
+  bpmKick: number;
+  birdsEye: BirdsEyeProps;
+  bpm: number;
 }

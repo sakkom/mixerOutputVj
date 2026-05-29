@@ -7,6 +7,7 @@ export function setThree(canvas: HTMLCanvasElement) {
   const W = window.innerWidth;
   const H = window.innerHeight;
   const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 100);
+  // const camera = new THREE.PerspectiveCamera(45, 1 / 1, 0.1, 100);
   const renderer = new THREE.WebGLRenderer({
     canvas,
     antialias: true,

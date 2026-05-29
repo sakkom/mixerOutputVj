@@ -21,6 +21,7 @@ import {
 import {
   AudioRefProps,
   AudioTexs,
+  OriginAudioRefProps,
   OutputVisualParams,
   ThreeFloat32Array,
   VisualParams,
@@ -30,6 +31,10 @@ import {
   LayerPattern,
   useVisualParamsStore,
 } from "../store/visualParamsStore";
+import { audioAnalyerEvent } from "./analyer";
+import { fftScene } from "./graph/fft";
+import { useAudioEventStore } from "../store/audioEventStore";
+import { useBirdsEyeStore } from "../store/birdsEyeStore";
 
 function waveProcessor(
   audioRef: AudioRefProps,
@@ -109,20 +114,30 @@ export default function Page() {
   const pmAverWindow = useAudioValueStore((s) => s.pmAverWindow);
   const amp = useAudioValueStore((s) => s.amp);
 
-  const bpm = useAudioValueStore((s) => s.bpm);
+  const bpm = useAudioEventStore((s) => s.bpm);
 
   const stereo = useVisualParamsStore((s) => s.stereo);
   const mono = useVisualParamsStore((s) => s.mono);
   const selector = useVisualParamsStore((s) => s.selector);
   const layer = useVisualParamsStore((s) => s.layer);
-  const visualParams: OutputVisualParams = { stereo, mono, layer };
+
+  const bpmKick = useAudioEventStore((s) => s.bpmKick);
+  const rms = useAudioEventStore((s) => s.rms);
+
+  // const visualParams: OutputVisualParams = {
+  //   stereo,
+  //   mono,
+  //   layer,
+  //   bpmKick,
+  //   birdsEye: { mode: birdsEyeMode },
+  // };
 
   /*midi */
   const midiOutputRef = useRef<MIDIOutput | null>(null);
   const midiInputRef = useRef<MIDIInput | null>(null);
   const selectorRef = useRef<Set<"s" | "m">>(new Set());
   const layerRef = useRef<Set<"s" | "m" | "r">>(new Set());
-  const zrcRef = useRef<number>(0);
+  // const zrcRef = useRef<number>(0);
 
   useEffect(() => {}, []);
 
@@ -299,11 +314,31 @@ export default function Page() {
           },
         };
 
+        const birdsEyeCcMap: Record<number, (norm: number) => void> = {
+          5: (n) => {
+            useBirdsEyeStore.getState().updateIsBirdEye(n);
+          },
+        };
+
+        const audioCcMap: Record<number, (norm: number) => void> = {
+          104: () => {
+            const renew = !useAudioEventStore.getState().isActive;
+            useAudioEventStore.getState().updateIsActive(renew);
+            midiOutputRef.current?.send([
+              176,
+              104,
+              Number(renew) > 0 ? 127 : 0,
+            ]);
+          },
+        };
+
         //ボタンも変える？[0, 1][0,127]
         const norm = value / 127;
         waveCcMap[cc]?.(norm);
         visualCcMap[cc]?.(norm);
         layerCcMap[cc]?.(norm);
+        birdsEyeCcMap[cc]?.(norm);
+        audioCcMap[cc]?.(norm);
       };
     }
 
@@ -329,11 +364,9 @@ export default function Page() {
       audioTexsRef.current,
     );
 
-    //bpmdetector専用のanalyser必要
-    const bpmDetector = BpmDetector.createBpm();
-    bpmDetector.init(audioRef.current.analyser[0]);
+    const audioObserver = audioAnalyerEvent();
 
-    const clock = new THREE.Clock();
+    const timer = new THREE.Timer();
 
     // let lastTime = 0;
     // let frameCount = 0;
@@ -346,12 +379,9 @@ export default function Page() {
       //   lastTime = now;
       // }
 
-      const time = clock.getElapsedTime();
-      const detectedBpm = bpmDetector.update(time);
-      // console.log(bpm);
-      if (bpm !== detectedBpm) {
-        useAudioValueStore.getState().updateBpm(detectedBpm);
-      }
+      timer.update();
+      const time = timer.getElapsed();
+      audioObserver.update(time);
 
       if (audioRef.current) {
         //stereo
@@ -376,12 +406,15 @@ export default function Page() {
 
       renderer.setViewport(0, 0, W, H);
       renderer.setScissor(0, 0, W, H);
-      renderer.render(scene0, camera);
+      renderer.render(audioObserver.scene, camera);
       renderer.setViewport(W, 0, W, H);
       renderer.setScissor(W, 0, W, H);
       renderer.render(scene1, camera);
 
       const vS = useVisualParamsStore.getState();
+      const bpmkickValue = useAudioEventStore.getState().isActive
+        ? useAudioEventStore.getState().bpmKick
+        : 0;
       const visualParams: OutputVisualParams = {
         stereo: {
           loopNum: vS.stereo.loopNum,
@@ -394,6 +427,11 @@ export default function Page() {
           alphas: vS.layer.alphas,
         },
         layer: vS.layer,
+        bpmKick: bpmkickValue,
+        birdsEye: {
+          isBirdsEye: useBirdsEyeStore.getState().isBirdsEye,
+        },
+        bpm: useAudioEventStore.getState().bpm,
       };
       channel.postMessage({
         buffers: outputBufferRef.current.slice(),
@@ -553,6 +591,45 @@ export default function Page() {
         <div>
           <div>mono</div>
           <h2>{JSON.stringify(mono)}</h2>
+        </div>
+      </div>
+      {/**/}
+      <div>
+        bpmKick
+        <div
+          style={{
+            width: "100px",
+            height: "100px",
+          }}
+        >
+          <div
+            style={{
+              width: `${bpmKick * 100}px`,
+              height: `${bpmKick * 100}px`,
+              backgroundColor: "blue",
+            }}
+          >
+            {bpmKick}
+          </div>
+        </div>
+      </div>
+      <div>
+        rms
+        <div
+          style={{
+            width: "800px",
+            height: "100px",
+          }}
+        >
+          <div
+            style={{
+              width: `${rms * 800}px`,
+              height: "100px",
+              backgroundColor: "green",
+            }}
+          >
+            {rms}
+          </div>
         </div>
       </div>
     </div>

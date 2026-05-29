@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { EffectComposer } from "three/examples/jsm/Addons.js";
+import { EffectComposer, ShaderPass } from "three/examples/jsm/Addons.js";
 import { stereoShader, monoShader } from "./shader";
 import {
   createComposer,
@@ -11,6 +11,8 @@ import {
   updateStereoTex,
 } from "./utils/visual";
 import { VisualParams } from "./value/utils/interface";
+import { CircleMove } from "./effector/circleMove";
+import { BirdsEyeProps } from "./store/birdsEyeStore";
 
 export const stereoVisual = () => {
   let edge: EdgeInterface;
@@ -29,7 +31,8 @@ export const stereoVisual = () => {
     renderer: THREE.WebGLRenderer,
     stereoBuffer: [Float32Array<ArrayBuffer>, Float32Array<ArrayBuffer>],
   ) => {
-    composer = createComposer(renderer, uniforms, stereoShader);
+    const result = createComposer(renderer, uniforms, stereoShader);
+    composer = result.composer;
 
     edge = createPinPong();
     texs = stereoBuffer.map((buffer) => createTex(buffer)) as [
@@ -67,6 +70,8 @@ export const monoVisual = () => {
   let edge: EdgeInterface;
   let composer: EffectComposer;
   let tex: THREE.DataTexture;
+  //composer pass uniforms
+  let circleMovePass: ShaderPass;
 
   const uniforms = {
     uTime: { value: 0 },
@@ -74,13 +79,22 @@ export const monoVisual = () => {
     uAudioTex: { value: new THREE.DataTexture() },
     uLoopNum: { value: 1 },
     uBold: { value: 0.005 },
+    uBpmKick: { value: 0 },
+    //
+    uIsBirdsEye: { value: 0 },
+    uMode: { value: 0 },
+    uBpm: { value: 0 },
   };
 
   const init = (
     renderer: THREE.WebGLRenderer,
     monoBuffer: Float32Array<ArrayBuffer>,
   ) => {
-    composer = createComposer(renderer, uniforms, monoShader);
+    const result = createComposer(renderer, uniforms, monoShader);
+    composer = result.composer;
+    circleMovePass = result.circleMovePass;
+    circleMovePass.uniforms.uAspect.value =
+      window.innerWidth / window.innerHeight;
     edge = createPinPong();
     tex = createTex(monoBuffer);
     uniforms.uAudioTex.value = tex;
@@ -91,6 +105,9 @@ export const monoVisual = () => {
     renderer: THREE.WebGLRenderer,
     texBuffer: Float32Array<ArrayBuffer>,
     visualParams: VisualParams,
+    bpmKick: number,
+    birdsEyeProps: BirdsEyeProps,
+    bpm: number,
   ) => {
     tex = updateMonoTex(tex, texBuffer, uniforms.uAudioTex);
     uniforms.uTime.value = time;
@@ -98,6 +115,10 @@ export const monoVisual = () => {
     // console.log(visualParams);
     uniforms.uLoopNum.value = visualParams.loopNum;
     uniforms.uBold.value = visualParams.bold;
+    uniforms.uBpmKick.value = bpmKick;
+    uniforms.uIsBirdsEye.value = birdsEyeProps.isBirdsEye;
+    uniforms.uBpm.value = bpm;
+    circleMovePass.uniforms.uTime.value = time;
     edge.mat.uniforms.uAlpha.value = visualParams.alphas![1];
     output(edge, composer, renderer);
   };

@@ -1,10 +1,84 @@
 export const monoShader = {
   vertexShader: `
     varying vec2 vUv;
+    uniform float uTime;
+    uniform float uBpmKick;
+    uniform float uIsBirdsEye;
+    uniform float uMode;
+    uniform float uBpm;
+
+    mat3 rotateX(float angle) {
+      float c = cos(angle), s = sin(angle);
+      return mat3(
+        1.0, 0.0, 0.0,
+        0.0, c, -s,
+        0.0, s, c
+      );
+    }
+    mat3 rotateY(float angle) {
+      float c = cos(angle);
+      float s = sin(angle);
+      return mat3(
+        c, 0., s,
+        0., 1., 0.,
+        -s, 0., c
+      );
+    }
+    mat3 rotateZ(float a) {
+      float c = cos(a), s = sin(a);
+      return mat3(c, -s, 0.0, s, c, 0.0, 0.0, 0.0, 1.0);
+    }
+
+    float getSquare(float wave) {
+      return mix(-1., 1., step(.5, wave));
+    }
+    float rand1(float y) {
+      return fract(sin(y * 12.9898) * 43758.5453123);
+    }
+
+    float getTri(float freq) {
+      float wave = fract(vUv.x * freq);//[0, 1]
+      wave -= .5; //[-0.5, 0.5]
+      wave = abs(wave); //[0, .5];
+      wave *= 4.;//[0, 2]
+      wave -= 1.; //[-1, 1]
+      return wave;
+    }
+
+    vec3 getBirdsEyePos(vec3 pos) {
+      float clock = uBpm/60. * uTime;
+      float freq = max(floor(rand1(floor(clock)) * 30.), 3.);
+      float amp = rand1(floor(vUv.x * freq / 6.28)) * .6 + .1;
+
+      pos *= .2 + uBpmKick * .7;
+      pos = pos * rotateX(uTime*.8);
+      pos = pos * rotateY(uTime*.5);
+      pos.x += sin(uTime*.8) * .4;
+      // pos.z += sin(uTime*.5) * .8;
+      // pos.x *= .1 + rand1(floor(uTime)) * .5;
+
+      float mode = mod(clock, 3.);
+
+      float wave = sin(vUv.x * freq);
+      if(mode < 1.) wave = wave;
+      else if(mode < 2.) wave = getSquare(wave);
+      else if(mode < 3.) wave = getTri(freq);
+
+      pos.y = wave * amp;
+      pos.y += sin(uTime*.6) * .3;
+
+
+
+      return pos;
+    }
+
+
     void main() {
       vUv = uv;
-      gl_Position = vec4(position, 1.0);
-      // gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+
+      vec3 pos = mix(position,getBirdsEyePos(position), uIsBirdsEye);
+
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.0);
     }
   `,
   fragmentShader: `
@@ -60,11 +134,16 @@ export const monoShader = {
 export const stereoShader = {
   vertexShader: `
     varying vec2 vUv;
+    uniform float uTime;
+
     void main() {
       vUv = uv;
-      gl_Position = vec4(position, 1.0);
-      // gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+
+      vec3 pos = position;
+
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.0);
     }
+
   `,
   fragmentShader: `
     varying vec2 vUv;
@@ -142,7 +221,8 @@ export const PinpongShader = {
     varying vec2 vUv;
     void main() {
       vUv = uv;
-      gl_Position = vec4(position, 1.);
+      // gl_Position = vec4(position, 1.);
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
     }
   `,
   fragmentShader: `
@@ -168,10 +248,11 @@ export const PinpongShader = {
       vec3 diffuseStep = step(.5, vec3(diffuse));
       vec3 prevStep = step(.5, vec3(prev));
 
-      vec3 color = mix(diffuse, prev, 0.0);
+      vec3 color = mix(diffuse, prev, 0.);
       // vec3 color = abs(diffuseStep-prevStep-diff);
 
       float alpha = step(0.01, lumi(color));
+      // float alpha = 1.;
 
       gl_FragColor = vec4(color, alpha * uAlpha);
     }

@@ -1,8 +1,6 @@
 import { create } from "zustand";
 
 interface AudioValueStore {
-  bpm: number;
-  updateBpm: (bpm: number) => void;
   sampleRate: number;
   updateSampleRate: (sampleRate: number) => void;
   fftSize: [number, number];
@@ -16,8 +14,6 @@ interface AudioValueStore {
 }
 
 export const useAudioValueStore = create<AudioValueStore>((set) => ({
-  bpm: 0,
-  updateBpm: (bpm) => set({ bpm }),
   sampleRate: 44100,
   updateSampleRate: (sampleRate) => set({ sampleRate }),
   fftSize: [2048, 2048],
