@@ -29,12 +29,14 @@ import {
 import {
   Layer,
   LayerPattern,
+  Selector,
   useVisualParamsStore,
 } from "../store/visualParamsStore";
 import { audioAnalyerEvent } from "./analyer";
 import { fftScene } from "./graph/fft";
 import { useAudioEventStore } from "../store/audioEventStore";
 import { useBirdsEyeStore } from "../store/birdsEyeStore";
+import { createRenderer, setObserver, setRecorder, waveParams } from "../page";
 
 function waveProcessor(
   audioRef: AudioRefProps,
@@ -94,6 +96,7 @@ function waveProcessor(
 
 export default function Page() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const viewCanvasRef = useRef<HTMLCanvasElement>(null);
   const audioRef = useRef<AudioRefProps | null>(null);
   const [isInit, setIsInit] = useState<boolean>(false);
   const visualBufferRef = useRef<ThreeFloat32Array>([
@@ -107,6 +110,8 @@ export default function Page() {
     new Float32Array(2048),
   ]);
   const audioTexsRef = useRef<AudioTexs>([null, null, null]);
+  const waveParams = useRef<any | null>(null);
+  const visualParams = useRef<OutputVisualParams | null>(null);
 
   const fftSize = useAudioValueStore((s) => s.fftSize);
   const sampleRate = useAudioValueStore((s) => s.sampleRate);
@@ -123,6 +128,12 @@ export default function Page() {
 
   const bpmKick = useAudioEventStore((s) => s.bpmKick);
   const rms = useAudioEventStore((s) => s.rms);
+  // const timerRef = useRef<number>(0);
+  const [time, setTime] = useState<number>(0);
+  const [visualParamsData, setVisualParamsData] =
+    useState<OutputVisualParams | null>();
+  const chunkRef = useRef<Blob[]>([]);
+  const recorderRef = useRef<MediaRecorder | null>(null);
 
   // const visualParams: OutputVisualParams = {
   //   stereo,
@@ -189,7 +200,7 @@ export default function Page() {
         };
         const waveCcMap: Record<number, (norm: number) => void> = {
           0: (n) => {
-            const tmp = Math.max(n * 1000, 1).toFixed(3);
+            const tmp = Math.max(n * 15, 1).toFixed(3);
             const amp = Number(tmp);
             useAudioValueStore.getState().updateAmp(amp);
           },
@@ -228,52 +239,108 @@ export default function Page() {
           bold: 0.5,
         };
         const visualCcMap: Record<number, (norm: number) => void> = {
-          13: (n) => {
+          16: (n) => {
             const loopNum = Math.max(Math.floor(n * visualCcRange.loopNum), 1);
             const s = useVisualParamsStore.getState();
-            const sel = selectorRef.current;
-            if (sel.has("s")) s.updateStereo({ loopNum, bold: s.stereo.bold });
-            if (sel.has("m")) s.updateMono({ loopNum, bold: s.mono.bold });
+            const sel = useVisualParamsStore.getState().selector;
+            if (sel === "s" || sel === "sm")
+              s.updateStereo({
+                loopNum,
+                bold: s.stereo.bold,
+                isCircle: s.isCircle[0],
+              });
+            if (sel === "m" || sel === "sm")
+              s.updateMono({
+                loopNum,
+                bold: s.mono.bold,
+                isCircle: s.isCircle[1],
+              });
           },
-          14: (n) => {
+          17: (n) => {
             const bold = Number(
               Math.max(n * visualCcRange.bold, 0.005).toFixed(3),
             );
             const s = useVisualParamsStore.getState();
-            const sel = selectorRef.current;
-            if (sel.has("s"))
-              s.updateStereo({ loopNum: s.stereo.loopNum, bold });
-            if (sel.has("m")) s.updateMono({ loopNum: s.mono.loopNum, bold });
+            const sel = useVisualParamsStore.getState().selector;
+            if (sel === "s" || sel === "sm")
+              s.updateStereo({
+                loopNum: s.stereo.loopNum,
+                bold,
+                isCircle: s.isCircle[0],
+              });
+            if (sel === "m" || sel === "sm")
+              s.updateMono({
+                loopNum: s.mono.loopNum,
+                bold,
+                isCircle: s.isCircle[1],
+              });
           },
-          91: (n) => {
-            n > 0
-              ? selectorRef.current.add("m")
-              : selectorRef.current.delete("m");
-            const status =
-              selectorRef.current.has("s") && selectorRef.current.has("m")
-                ? "sm"
-                : selectorRef.current.has("m")
-                  ? "m"
-                  : selectorRef.current.has("s")
-                    ? "s"
-                    : null;
-            useVisualParamsStore.getState().updateSelector(status);
-            midiOutputRef.current?.send([176, 91, n > 0 ? 127 : 0]);
+          3: (n) => {
+            const select = n < 0.1 ? "s" : n > 0.9 ? "sm" : "m";
+            useVisualParamsStore.getState().updateSelector(select as Selector);
           },
-          92: (n) => {
-            n > 0
-              ? selectorRef.current.add("s")
-              : selectorRef.current.delete("s");
-            const status =
-              selectorRef.current.has("s") && selectorRef.current.has("m")
-                ? "sm"
-                : selectorRef.current.has("m")
-                  ? "m"
-                  : selectorRef.current.has("s")
-                    ? "s"
-                    : null;
-            useVisualParamsStore.getState().updateSelector(status);
-            midiOutputRef.current?.send([176, 92, n > 0 ? 127 : 0]);
+          13: (n) => {
+            const select = useVisualParamsStore.getState().selector;
+            let renew = useVisualParamsStore.getState().isCircle.slice();
+            if (select === "s") renew[0] = n;
+            if (select === "m") renew[1] = n;
+            if (select === "sm") renew = [n, n];
+            useVisualParamsStore
+              .getState()
+              .updateIsCircle(renew as [number, number]);
+          },
+          100: (n) => {
+            let renew = useVisualParamsStore.getState().isPinpong.slice();
+            renew = [n, renew[1]];
+
+            useVisualParamsStore
+              .getState()
+              .updateIsPingPong(renew as [number, number]);
+            midiOutputRef.current?.send([176, 100, n > 0.5 ? 127 : 0]);
+          },
+          101: (n) => {
+            let renew = useVisualParamsStore.getState().isPinpong.slice();
+            renew = [renew[0], n];
+            useVisualParamsStore
+              .getState()
+              .updateIsPingPong(renew as [number, number]);
+            midiOutputRef.current?.send([176, 101, n > 0.5 ? 127 : 0]);
+          },
+          102: (n) => {
+            let renew = useVisualParamsStore.getState().isCircleMove.slice();
+            renew = [n, renew[1]];
+            useVisualParamsStore
+              .getState()
+              .updateIsCiecleMove(renew as [number, number]);
+            midiOutputRef.current?.send([176, 102, n > 0.5 ? 127 : 0]);
+          },
+          103: (n) => {
+            let renew = useVisualParamsStore.getState().isCircleMove.slice();
+            renew = [renew[0], n];
+            useVisualParamsStore
+              .getState()
+              .updateIsCiecleMove(renew as [number, number]);
+            midiOutputRef.current?.send([176, 103, n > 0.5 ? 127 : 0]);
+          },
+          21: (n) => {
+            let renew = useVisualParamsStore
+              .getState()
+              .isCircleMoveColor.slice();
+            renew = [n, renew[1]];
+            useVisualParamsStore
+              .getState()
+              .updateIsCiecleMoveColor(renew as [number, number]);
+            midiOutputRef.current?.send([176, 21, n > 0.5 ? 127 : 0]);
+          },
+          20: (n) => {
+            let renew = useVisualParamsStore
+              .getState()
+              .isCircleMoveColor.slice();
+            renew = [renew[0], n];
+            useVisualParamsStore
+              .getState()
+              .updateIsCiecleMoveColor(renew as [number, number]);
+            midiOutputRef.current?.send([176, 20, n > 0.5 ? 127 : 0]);
           },
         };
         function getLayer(n: number, s: "s" | "m" | "r") {
@@ -415,16 +482,25 @@ export default function Page() {
       const bpmkickValue = useAudioEventStore.getState().isActive
         ? useAudioEventStore.getState().bpmKick
         : 0;
-      const visualParams: OutputVisualParams = {
+      // console.log(bpmkickValue);
+      const visualParamsData: OutputVisualParams = {
         stereo: {
           loopNum: vS.stereo.loopNum,
           bold: vS.stereo.bold,
           alphas: vS.layer.alphas,
+          isCircle: vS.isCircle[0],
+          isPinPong: vS.isPinpong[0],
+          isCircleMove: vS.isCircleMove[0],
+          isCircleMoveColor: vS.isCircleMoveColor[0],
         },
         mono: {
           loopNum: vS.mono.loopNum,
           bold: vS.mono.bold,
           alphas: vS.layer.alphas,
+          isCircle: vS.isCircle[1],
+          isPinPong: vS.isPinpong[1],
+          isCircleMove: vS.isCircleMove[1],
+          isCircleMoveColor: vS.isCircleMoveColor[1],
         },
         layer: vS.layer,
         bpmKick: bpmkickValue,
@@ -433,12 +509,26 @@ export default function Page() {
         },
         bpm: useAudioEventStore.getState().bpm,
       };
+      setVisualParamsData(visualParamsData);
+      visualParams.current = visualParamsData;
+      waveParams.current = outputBufferRef.current.slice();
+      // for (let i = 0; i < waveParams.current[0].length; i++) {
+      //   waveParams.current[0][i] = Math.random() - 0.5;
+      // }
+      // for (let i = 1; i < waveParams.current[1].length; i++) {
+      //   waveParams.current[1][i] = Math.random() - 0.5;
+      // }
+      // for (let i = 2; i < waveParams.current[2].length; i++) {
+      //   waveParams.current[2][i] = Math.random() - 0.5;
+      // }
+      // console.log(waveParams.current);
       channel.postMessage({
         buffers: outputBufferRef.current.slice(),
-        visualParams,
+        visualParamsData,
       });
 
       animId = requestAnimationFrame(loop);
+      setTime(time);
     };
     loop();
 
@@ -446,6 +536,93 @@ export default function Page() {
       cancelAnimationFrame(animId);
       renderer.dispose();
       channel.close();
+    };
+  }, [isInit]);
+
+  useEffect(() => {
+    let aniId: number;
+    if (!viewCanvasRef.current || !waveParams.current) return;
+
+    const renderer = createRenderer(viewCanvasRef.current);
+    console.log(waveParams.current);
+    // for (let i = 0; i < waveParams.current[0].length; i++) {
+    //   waveParams.current[0][i] = Math.random();
+    // }
+    // for (let i = 1; i < waveParams.current[1].length; i++) {
+    //   waveParams.current[1][i] = Math.random();
+    // }
+    // for (let i = 2; i < waveParams.current[2].length; i++) {
+    //   waveParams.current[2][i] = Math.random();
+    // }
+    console.log(waveParams.current);
+
+    const { stereoVisualObserver, monoVisualObserver } = setObserver(
+      renderer,
+      waveParams.current,
+    );
+
+    const clock = new THREE.Clock();
+    let lastTime = 0;
+    let frameCount = 0;
+    let counter = 0;
+    const loop = () => {
+      // console.log(
+      //   visualParams.current?.mono.isCircleMove,
+      //   visualParams.current?.stereo.isCircleMove,
+      // );
+      frameCount++;
+      const now = performance.now();
+      if (now - lastTime >= 1000) {
+        console.log(`FPS: ${frameCount}`);
+        frameCount = 0;
+        lastTime = now;
+      }
+      console.log(visualParams.current);
+      if (waveParams.current) {
+        stereoVisualObserver.update(
+          clock.getElapsedTime(),
+          renderer,
+          [waveParams.current[0], waveParams.current[1]],
+          visualParams.current!.stereo,
+          visualParams.current!.bpmKick,
+          visualParams.current!.bpm,
+        );
+        monoVisualObserver.update(
+          clock.getElapsedTime(),
+          renderer,
+          waveParams.current[2],
+          visualParams.current!.mono,
+          visualParams.current!.bpmKick,
+          visualParams.current!.birdsEye,
+          visualParams.current!.bpm,
+        );
+
+        /*layer pattern */
+        if (counter % 2 === 0) {
+          renderer.setRenderTarget(null);
+          renderer.clear();
+          const pattern = visualParams.current?.layer.pattern;
+          if (pattern === "sm") {
+            monoVisualObserver.render(renderer);
+            stereoVisualObserver.render(renderer);
+          } else if (pattern === "ms") {
+            stereoVisualObserver.render(renderer);
+            monoVisualObserver.render(renderer);
+          } else if (pattern === "s") {
+            stereoVisualObserver.render(renderer);
+          } else if (pattern === "m") {
+            monoVisualObserver.render(renderer);
+          }
+        }
+      }
+
+      aniId = requestAnimationFrame(loop);
+      counter++;
+    };
+    loop();
+    return () => {
+      cancelAnimationFrame(aniId);
+      renderer.dispose();
     };
   }, [isInit]);
 
@@ -471,115 +648,119 @@ export default function Page() {
     smooths[index] = Number(e.target.value);
     useAudioValueStore.getState().updateSmooth(smooths);
   };
+  const handlePlay = async () => {
+    if (!viewCanvasRef.current) return;
+    const { recorder } = await setRecorder(viewCanvasRef.current);
+    recorderRef.current = recorder;
+    recorderRef.current.ondataavailable = (e) => chunkRef.current.push(e.data);
+    // recorderRef.current.start(30000);
+    recorderRef.current.start();
+  };
+  const handleDownload = () => {
+    const blob = new Blob(chunkRef.current, { type: "video/mp4" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    // console.log(a);
+    a.download = "0531.mp4";
+    a.click();
+    recorderRef.current?.stop();
+  };
 
   return (
-    <div style={{ margin: 0, padding: 0 }}>
+    <div style={{ margin: 0, padding: 0, position: "relative" }}>
+      <canvas
+        style={{
+          width: "100%",
+          height: "100%",
+          backgroundColor: "black",
+          // position: "fixed",
+        }}
+        ref={viewCanvasRef}
+      />
       <canvas style={{ width: "80%" }} ref={canvasRef} />
-      <div style={{ display: "flex", alignItems: "center" }}>
-        <h2>bpm</h2>
-        <div>{bpm}</div>
-      </div>
-      <div>
-        <h2>fftSize</h2>
-        <div style={{ display: "flex" }}>
-          <div>left</div>
-          <select
-            value={fftSize[0]}
-            onChange={(e) => handleFftSizeChange(Number(e.target.value), 0)}
-          >
-            {[32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384].map(
-              (v, i) => (
-                <option key={i} value={v}>
-                  {v}
-                </option>
-              ),
-            )}
-          </select>
-          <div>{fftSize[0]}</div>
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          // alignItems: "center",
+          position: "absolute",
+          top: 0,
+          right: 0,
+          // color: `hsl(${time * 0.1 * 360} 100% 50%)`,
+          // transform: `translate($P})`
+          // opacity: `${Math.sin(time * 0.5) * 0.5 + 0.5}`,
+          width: "100%",
+          height: "100vh",
+          // textAlign: "center",
+        }}
+      >
+        <div
+          style={{
+            position: "absolute",
+            bottom: 0,
+            right: 0,
+            marginTop: "100px",
+            fontWeight: "bold",
+            color: "rgb(57, 255, 20)",
+            // transform: `translateX(${Math.sin(time * 100) * 500}px) translateY(${Math.sin(time * 100 + 100) * 500}px)`,
+            letterSpacing: `${Math.sin(time) * 25}px`,
+            fontSize: `${Math.sin(time) * 100}px`,
+          }}
+        >
+          {time.toFixed(2)}
         </div>
-        <div style={{ display: "flex" }}>
-          <div>right</div>
-          <select
-            value={fftSize[1]}
-            onChange={(e) => handleFftSizeChange(Number(e.target.value), 1)}
-          >
-            {[32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384].map(
-              (v, i) => (
-                <option key={i} value={v}>
-                  {v}
-                </option>
-              ),
-            )}
-          </select>
-          <div>{fftSize[1]}</div>
-        </div>
+        {visualParamsData && (
+          <div style={{ display: "flex", flexWrap: "wrap" }}>
+            {JSON.stringify(visualParamsData)
+              .split("")
+              // .map((char, i) => (
+              //   <div
+              //     key={i}
+              //     style={{
+              //       // transform: `translateX(${Math.sin(i + time) * 50}px) translateY(${Math.sin(i * 10 + time) * 50}px) rotate(${i + time * 10}deg)`,
+              //       // fontSize: `${Math.sin(i * 1000) * 100 + 10}px`,
+              //       letterSpacing: `${Math.sin(i + time) * 20}px`,
+              //     }}
+              //   >
+              //     {char}
+              //   </div>
+              // ))
+              .map((char, i) => {
+                const cycle = Math.floor(time % 5);
+                const colorIndex =
+                  Math.floor((time * 0.5) / Math.floor(Math.random() * 10)) * 2;
+                // const colorIndex = Math.floor(i / 5) * 10;
+                // console.log(cycle);
+                return (
+                  <div
+                    key={i}
+                    style={{
+                      transform:
+                        cycle === 1
+                          ? `rotate(${i + time * 100 * i}deg)`
+                          : `translateX(${Math.sin(i + time) * 0}px) translateY(${Math.sin(i * 10 + time) * 0}px) rotate(${0}deg)`,
+                      fontSize: `${(Math.sin(i * 100000) * 0.5 + 0.5) * 20 + 10}px`,
+                      color:
+                        colorIndex % 2 === 0
+                          ? `rgb(138, 0, 255)`
+                          : `rgb(255, 38, 3)`,
+                      marginTop:
+                        cycle === 4
+                          ? `${(Math.sin(colorIndex * 10000) * 0.5 + 0.5) * 700}px`
+                          : `${0}px`,
+
+                      // letterSpacing:
+                      //   cycle === 3 ? `${Math.sin(i + time) * 20}px` : "",
+                    }}
+                  >
+                    {char}
+                  </div>
+                );
+              })}
+          </div>
+        )}
       </div>
-      <div style={{ display: "flex", alignItems: "center" }}>
-        <h2>sampleRate</h2>
-        <input
-          type="range"
-          min={3000}
-          max={768000}
-          step={1000}
-          value={sampleRate}
-          onChange={(e) => handleSampleRateChange(e)}
-        />
-        <div>{sampleRate}</div>
-      </div>
-      <div style={{ display: "flex", alignItems: "center" }}>
-        <h2>smooth0</h2>
-        <input
-          type="range"
-          min={0.5}
-          max={1}
-          step={0.001}
-          value={smooths[0]}
-          onChange={(e) => handleSmoothChange(e, 0)}
-        />
-        <div>{smooths[0]}</div>
-      </div>
-      <div style={{ display: "flex", alignItems: "center" }}>
-        <h2>smooth1</h2>
-        <input
-          type="range"
-          min={0}
-          max={1}
-          step={0.001}
-          value={smooths[1]}
-          onChange={(e) => handleSmoothChange(e, 1)}
-        />
-        <div>{smooths[1]}</div>
-      </div>
-      <div style={{ display: "flex", alignItems: "center" }}>
-        <h2>pmAver</h2>
-        <input
-          type="range"
-          min={1}
-          max={1000}
-          step={1}
-          value={pmAverWindow}
-          onChange={(e) =>
-            useAudioValueStore
-              .getState()
-              .updatePmAverWindow(Number(e.target.value))
-          }
-        />
-        <div>{pmAverWindow}</div>
-      </div>
-      <div style={{ display: "flex", alignItems: "center" }}>
-        <h2>amp</h2>
-        <input
-          type="range"
-          min={1}
-          max={200}
-          step={1}
-          value={amp}
-          onChange={(e) =>
-            useAudioValueStore.getState().updateAmp(Number(e.target.value))
-          }
-        />
-        <div>{amp}</div>
-      </div>
+
       <div style={{ backgroundColor: "black", color: "white" }}>
         <h1>visual params</h1>
         <h2>selector: {selector}</h2>
@@ -631,6 +812,12 @@ export default function Page() {
             {rms}
           </div>
         </div>
+      </div>
+      <div onClick={handlePlay} style={{ color: "black" }}>
+        rec
+      </div>
+      <div onClick={handleDownload} style={{ color: "black" }}>
+        download
       </div>
     </div>
   );

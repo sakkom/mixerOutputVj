@@ -50,7 +50,7 @@ export const monoShader = {
       float freq = max(floor(rand1(floor(clock)) * 30.), 3.);
       float amp = rand1(floor(vUv.x * freq / 6.28)) * .6 + .1;
 
-      pos *= .2 + uBpmKick * .7;
+      pos *= .25 + uBpmKick * .7;
       pos = pos * rotateX(uTime*.8);
       pos = pos * rotateY(uTime*.5);
       pos.x += sin(uTime*.8) * .4;
@@ -87,19 +87,31 @@ export const monoShader = {
     uniform float uTime;
     uniform float uLoopNum;
     uniform float uBold;
+    uniform float uIsCircle;
+    uniform float uBpmKick;
+    uniform float uBpm;
+    uniform float uIsBirdsEye;
 
     float rand1(float y) {
       return fract(sin(y * 12.9898) * 43758.5453123);
+    }
+    vec3 pallet2PI(float i, vec3 p) {
+      float zeroStart = -1.57;
+      vec3 sinP = vec3(
+        sin(i*6.28 + p.x+zeroStart) * .5 + .5,
+        sin(i*6.28 + p.y+zeroStart)*.5 + .5,
+        sin(i*6.28 + p.z + zeroStart) * .5 + .5
+      );
+      // vec3 sinP = vec3(abs(sin(i*6.28 + p.x)), abs(sin(i*6.28 + p.y)), abs(sin(i*6.28 + p.z)));
+      return sinP;
     }
 
     void main() {
       vec2 uv = vUv;
       // uv.x = (uv.x - .5)*16./9. + .5;
 
-      float isCircle = 0.;
-
-      uv.x = mix(uv.x, (uv.x - .5)*16./9. + .5, isCircle);
-      uv = mix(uv, (uv-.5)*2.+.5, isCircle);
+      uv.x = mix(uv.x, (uv.x - .5)*16./9. + .5, uIsCircle);
+      uv = mix(uv, (uv-.5)*2.+.5, uIsCircle);
 
       // uv = fract(uv * 1.);
       float a = atan(uv.y-.5, uv.x-.5);
@@ -111,17 +123,25 @@ export const monoShader = {
       for(float i = 0.; i < uLoopNum; i++) {
         vec2 sampleUv = vec2(i/uLoopNum + uv.x/uLoopNum, .5);
         vec2 sampleUvAngle = vec2(i/uLoopNum + a/uLoopNum, .5);
-        vec2 mixUv = mix(sampleUv, sampleUvAngle, isCircle);
+        vec2 mixUv = mix(sampleUv, sampleUvAngle, uIsCircle);
         float audio = (texture2D(uAudioTex, mixUv).r * 1.);
         audio = clamp(audio, -1., 1.);
         audio = audio * .5 + .5;
-        audio = mix(audio, audio, isCircle);
+        audio = mix(audio, audio, uIsCircle);
 
         float diffUv = uv.y; //kick反応させてみてもいいかも
-        float diff = mix(abs(diffUv - audio), abs(dist - audio), isCircle);
+        float diff = mix(abs(diffUv - audio), abs(dist - audio), uIsCircle);
         float edge = smoothstep(uBold*.5 * (1.-i/uLoopNum), uBold*(1.-i/uLoopNum), diff);
         // float edge = step(.1 * (1.-i/uLoopNum), diff);
-        outputColor = vec3(abs(outputColor - vec3(edge)));
+        float timing =step(.3, uBpmKick);
+        float bpmTime = uBpm/60. * uTime;
+        vec3 kickColor = pallet2PI(i/uLoopNum, vec3(bpmTime*2., bpmTime, bpmTime*1.5)) * 2.5;
+        kickColor = mix(vec3(1.), kickColor, .8);
+        kickColor = mix(vec3(1.), kickColor, 1.-step(.1, uIsBirdsEye));
+        // vec3 kickColor = vec3(1., 0., 0.);
+
+        vec3 edgeColor = mix(vec3(edge), kickColor * vec3(edge), timing);
+        outputColor = vec3(abs(outputColor - edgeColor));
       }
 
       float isEven = 1.-mod(uLoopNum, 2.);
@@ -151,18 +171,30 @@ export const stereoShader = {
     uniform float uTime;
     uniform float uLoopNum;
     uniform float uBold;
+    uniform float uIsCircle;
+    uniform float uBpmKick;
+    uniform float uBpm;
 
     float rand1(float y) {
       return fract(sin(y * 12.9898) * 43758.5453123);
+    }
+    vec3 pallet2PI(float i, vec3 p) {
+      float zeroStart = -1.57;
+      vec3 sinP = vec3(
+        sin(i*6.28 + p.x+zeroStart) * .5 + .5,
+        sin(i*6.28 + p.y+zeroStart)*.5 + .5,
+        sin(i*6.28 + p.z + zeroStart) * .5 + .5
+      );
+      // vec3 sinP = vec3(abs(sin(i*6.28 + p.x)), abs(sin(i*6.28 + p.y)), abs(sin(i*6.28 + p.z)));
+      return sinP;
     }
 
     void main() {
     vec2 uv = vUv;
 
-    float isCircle = 1.;
 
-    uv.x = mix(uv.x, (uv.x - .5)*16./9. + .5, isCircle);
-    uv = mix(uv, (uv-.5)*2.+.5, isCircle);
+    uv.x = mix(uv.x, (uv.x - .5)*16./9. + .5, uIsCircle);
+    uv = mix(uv, (uv-.5)*2.+.5, uIsCircle);
     // uv = fract(uv * 1.);
     float a = atan(uv.y-.5, uv.x-.5);
     a = (a + 3.14) / 6.28;
@@ -175,38 +207,59 @@ export const stereoShader = {
     for(float i = 0.; i < uLoopNum; i++) {
       vec2 sampleUv = vec2(i/uLoopNum + uv.x/uLoopNum, .5);
       vec2 sampleUvAngle = vec2(i/uLoopNum + a/uLoopNum, .5);
-      vec2 mixUv = mix(sampleUv, sampleUvAngle, isCircle);
+      vec2 mixUv = mix(sampleUv, sampleUvAngle, uIsCircle);
       float audio = (texture2D(uAudioTex[0], mixUv).r * 1.);
       audio = clamp(audio, -1., 1.);
       audio = audio * .5 + .5;
-      audio = mix(audio, audio, isCircle);
+      audio = mix(audio, audio, uIsCircle);
 
       float diffUv = uv.y; //kick反応させてみてもいいかも
-      float diff = mix(abs(diffUv - audio), abs(dist - audio), isCircle);
+      float diff = mix(abs(diffUv - audio), abs(dist - audio), uIsCircle);
       float edge = smoothstep(uBold*.5 * (1.-i/uLoopNum), uBold*(1.-i/uLoopNum), diff);
       // float edge = step(.1 * (1.-i/uLoopNum), diff);
-      outputColor0 = vec3(abs(outputColor0 - vec3(edge)));
+      float timing =step(.3, uBpmKick);
+      float bpmTime = uBpm/60. * uTime;
+      vec3 kickColor = vec3(1.);
+      // vec3 kickColor = vec3(1., 0., 0.);
+
+      vec3 edgeColor0 = mix(vec3(edge), kickColor * vec3(edge), timing);
+      outputColor0 = vec3(abs(outputColor0 - edgeColor0));
     }
 
     for(float i = 0.; i < uLoopNum; i++) {
       vec2 sampleUv = vec2(i/uLoopNum + uv.x/uLoopNum, .5);
       vec2 sampleUvAngle = vec2(i/uLoopNum + a/uLoopNum, .5);
-      vec2 mixUv = mix(sampleUv, sampleUvAngle, isCircle);
+      vec2 mixUv = mix(sampleUv, sampleUvAngle, uIsCircle);
       float audio = (texture2D(uAudioTex[1], mixUv).r * 1.);
       audio = clamp(audio, -1., 1.);
       audio = audio * .5 + .5;
-      audio = mix(audio, audio, isCircle);
+      audio = mix(audio, audio, uIsCircle);
 
       float diffUv = uv.y; //kick反応させてみてもいいかも
-      float diff = mix(abs(diffUv - audio), abs(dist - audio), isCircle);
+      float diff = mix(abs(diffUv - audio), abs(dist - audio), uIsCircle);
       float edge = smoothstep(uBold*.5 * (1.-i/uLoopNum), uBold*(1.-i/uLoopNum), diff);
       // float edge = step(.1 * (1.-i/uLoopNum), diff);
-      outputColor1 = vec3(abs(outputColor1 - vec3(edge)));
+      float timing =step(.3, uBpmKick);
+      float bpmTime = uBpm/60. * uTime;
+      // vec3 kickColor = pallet2PI(i/uLoopNum, vec3(bpmTime*1.1, bpmTime, bpmTime*1.05)) * 1.5;
+      vec3 kickColor = pallet2PI(i/uLoopNum, vec3(fract(bpmTime*1.1)*2., fract(bpmTime*.5)*.5, fract(bpmTime*1.05))) * 1.5;
+      // vec3 kickColor = vec3(1., 0., 0.);
+
+      vec3 edgeColor1 = mix(vec3(edge), kickColor * vec3(edge), timing);
+      outputColor1 = vec3(abs(outputColor1 - edgeColor1));
     }
 
-    outputColor = vec3(abs(outputColor0-outputColor1));
+    outputColor = vec3(abs(outputColor0-outputColor1)) * 2.;
+    // outputColor = vec3(clamp(outputColor0 + outputColor1, 0., 1.));
+    // outputColor = vec3(outputColor0 + outputColor1);
+    float isEven = 1.-mod(uLoopNum, 2.);
+    // outputColor = mix(1.-outputColor, outputColor, isEven);
 
+    // float audio = texture2D(uAudioTex[0], vUv ).r * .5 + .5;
+    // float col = abs(vUv.y - audio);
+    //  col = step(.01, col);
     gl_FragColor = vec4(outputColor, 1.);
+    // gl_FragColor = vec4(vec3(col), 1.);
     }
   `,
 };
@@ -216,6 +269,8 @@ export const PinpongShader = {
     tDiffuse: { value: null },
     tPrev: { value: null },
     uAlpha: { value: 0 },
+    uPinpong: { value: 0 },
+    uIsBirdsEye: { value: 0 },
   },
   vertexShader: `
     varying vec2 vUv;
@@ -230,6 +285,8 @@ export const PinpongShader = {
     uniform sampler2D tDiffuse;
     uniform sampler2D tPrev;
     uniform float uAlpha;
+    uniform float uPinpong;
+    uniform float uIsCircle;
 
     float lumi(vec3 color) {
       return dot(color, vec3(0.3, 0.59, 0.11));
@@ -243,16 +300,20 @@ export const PinpongShader = {
       float prevLumi = lumi(prev);
 
       float diff = length(abs(diffuse-prev));
-      diff = clamp(diff, 0., 0.95);
+      diff = clamp(diff, 0., 1.);
 
       vec3 diffuseStep = step(.5, vec3(diffuse));
       vec3 prevStep = step(.5, vec3(prev));
 
-      vec3 color = mix(diffuse, prev, 0.);
-      // vec3 color = abs(diffuseStep-prevStep-diff);
+      vec3 normalColor = mix(diffuse, prev, 0.);
+      vec3 pingPongColor = mix(diffuse, prev, diff * .996);
+      // vec3 pingPongColor = abs(diffuseStep-prevStep-diff);
+
+      vec3 color = mix(normalColor, pingPongColor, uPinpong);
 
       float alpha = step(0.01, lumi(color));
       // float alpha = 1.;
+      // alpha = (1., alpha, uIsBirdsEye);
 
       gl_FragColor = vec4(color, alpha * uAlpha);
     }

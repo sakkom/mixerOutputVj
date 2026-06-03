@@ -31,7 +31,11 @@ export type AudioTexs = [
 export interface VisualParams {
   loopNum: number;
   bold: number;
+  isCircle: number;
   alphas?: number[];
+  isPinPong?: number;
+  isCircleMove?: number;
+  isCircleMoveColor?: number;
 }
 
 export interface OutputVisualParams {

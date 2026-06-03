@@ -128,7 +128,7 @@ export const createComposer = (
   const pass0 = new ShaderPass(Effector0);
   composer.addPass(pass0);
   const circleMovePass = new ShaderPass(CircleMove);
-  // composer.addPass(circleMovePass);
+  composer.addPass(circleMovePass);
 
   return { composer, circleMovePass };
 };
