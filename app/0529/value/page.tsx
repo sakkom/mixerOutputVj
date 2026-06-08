@@ -694,7 +694,7 @@ export default function Page() {
           // textAlign: "center",
         }}
       >
-        <div
+        {/*<div
           style={{
             position: "absolute",
             bottom: 0,
@@ -758,7 +758,7 @@ export default function Page() {
                 );
               })}
           </div>
-        )}
+        )}*/}
       </div>
 
       <div style={{ backgroundColor: "black", color: "white" }}>

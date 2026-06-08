@@ -17,7 +17,7 @@ export async function playAudioAnalyer(): Promise<OriginAudioRefProps> {
   const audioInput = (await navigator.mediaDevices.enumerateDevices())
     .filter((d) => d.kind == "audioinput")
     .find((d) => d.label.includes("Steinberg UR22mkII"));
-
+  // console.log(audioInput);
   const stream = await navigator.mediaDevices.getUserMedia({
     audio: {
       deviceId: { exact: audioInput?.deviceId },
