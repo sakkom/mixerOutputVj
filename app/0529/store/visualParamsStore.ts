@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { VisualParams } from "../value/utils/interface";
+import { ObjectType, VisualParams } from "../value/utils/interface";
 
 export type Selector = "s" | "m" | "sm";
 export type LayerPattern = "s" | "m" | "sm" | "ms" | null;
@@ -18,7 +18,7 @@ interface VisualParamsStore {
   updateSelector: (selector: Selector) => void;
   layer: Layer;
   updateLayer: (layer: Layer) => void;
-  isCircle: [number, number];
+  isCircle: [number, number]; //button
   updateIsCircle: (isCircle: [number, number]) => void;
   isPinpong: [number, number];
   updateIsPingPong: (isPinpong: [number, number]) => void;
@@ -26,6 +26,10 @@ interface VisualParamsStore {
   updateIsCiecleMove: (isCircleMove: [number, number]) => void;
   isCircleMoveColor: [number, number];
   updateIsCiecleMoveColor: (isCircleMoveColor: [number, number]) => void;
+  monoObjectType: ObjectType;
+  updateMonoObjectType: (types: ObjectType) => void;
+  stereoObjectType: ObjectType;
+  updateStereoObjectType: (types: ObjectType) => void;
 }
 
 export const useVisualParamsStore = create<VisualParamsStore>((set) => ({
@@ -47,4 +51,8 @@ export const useVisualParamsStore = create<VisualParamsStore>((set) => ({
   isCircleMoveColor: [0, 0] as [number, number],
   updateIsCiecleMoveColor: (isCircleMoveColor: [number, number]) =>
     set({ isCircleMoveColor }),
+  monoObjectType: "Mesh",
+  updateMonoObjectType: (type) => set({ monoObjectType: type }),
+  stereoObjectType: "Mesh",
+  updateStereoObjectType: (type) => set({ stereoObjectType: type }),
 }));

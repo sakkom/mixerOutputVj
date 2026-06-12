@@ -36,6 +36,7 @@ export interface VisualParams {
   isPinPong?: number;
   isCircleMove?: number;
   isCircleMoveColor?: number;
+  objectType?: ObjectType;
 }
 
 export interface OutputVisualParams {
@@ -45,4 +46,22 @@ export interface OutputVisualParams {
   bpmKick: number;
   birdsEye: BirdsEyeProps;
   bpm: number;
+}
+
+export type ObjectType = "Mesh" | "Points";
+// export type ObjectClass = THREE.Mesh | THREE.Points;
+
+/*0610
+visual.tsで主に使用。ただcontroller側のtex更新にも使えるかも
+*/
+export interface UpdateTexInterface {
+  texs: THREE.DataTexture[];
+  texsBuffer: Float32Array<ArrayBuffer>[];
+}
+
+export type DoubleDataTexture = [THREE.DataTexture, THREE.DataTexture];
+
+export interface SpiralInterface {
+  threshold: number;
+  morphSpeed: number;
 }

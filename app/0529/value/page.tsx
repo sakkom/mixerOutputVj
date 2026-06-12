@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
-import { BpmDetector } from "@/app/tools/bpmDetector";
+// import { BpmDetector } from "@/app/tools/bpmDetector";
 import { useAudioValueStore } from "../store/audioValueStore";
 import {
   ampEffect,
@@ -23,6 +23,7 @@ import {
   AudioTexs,
   OriginAudioRefProps,
   OutputVisualParams,
+  SpiralInterface,
   ThreeFloat32Array,
   VisualParams,
 } from "./utils/interface";
@@ -37,6 +38,7 @@ import { fftScene } from "./graph/fft";
 import { useAudioEventStore } from "../store/audioEventStore";
 import { useBirdsEyeStore } from "../store/birdsEyeStore";
 import { createRenderer, setObserver, setRecorder, waveParams } from "../page";
+import { useSpiralStore } from "../store/spiralStore";
 
 function waveProcessor(
   audioRef: AudioRefProps,
@@ -276,7 +278,7 @@ export default function Page() {
               });
           },
           3: (n) => {
-            const select = n < 0.1 ? "s" : n > 0.9 ? "sm" : "m";
+            const select = n < 0.1 ? "sm" : n > 0.9 ? "s" : "m";
             useVisualParamsStore.getState().updateSelector(select as Selector);
           },
           13: (n) => {
@@ -399,6 +401,38 @@ export default function Page() {
           },
         };
 
+        const 球面螺旋Map: Record<number, (norm: number) => void> = {
+          4: (n) => {
+            useSpiralStore.getState().updateThreshold(n);
+          },
+          15: (n) => {
+            const speedArray = [0.5, 1, 2];
+            const index = Math.floor(n * 2);
+            console.log(index);
+            useSpiralStore.getState().updateSpeed(speedArray[index]);
+          },
+          61: (n) => {
+            const current = useVisualParamsStore.getState().monoObjectType;
+            if (current === "Mesh") {
+              useVisualParamsStore.getState().updateMonoObjectType("Points");
+              midiOutputRef.current?.send([176, 61, 127]);
+            } else {
+              useVisualParamsStore.getState().updateMonoObjectType("Mesh");
+              midiOutputRef.current?.send([176, 61, 0]);
+            }
+          },
+          62: (n) => {
+            const current = useVisualParamsStore.getState().stereoObjectType;
+            if (current === "Mesh") {
+              useVisualParamsStore.getState().updateStereoObjectType("Points");
+              midiOutputRef.current?.send([176, 62, 127]);
+            } else {
+              useVisualParamsStore.getState().updateStereoObjectType("Mesh");
+              midiOutputRef.current?.send([176, 62, 0]);
+            }
+          },
+        };
+
         //ボタンも変える？[0, 1][0,127]
         const norm = value / 127;
         waveCcMap[cc]?.(norm);
@@ -406,6 +440,7 @@ export default function Page() {
         layerCcMap[cc]?.(norm);
         birdsEyeCcMap[cc]?.(norm);
         audioCcMap[cc]?.(norm);
+        球面螺旋Map[cc]?.(norm);
       };
     }
 
@@ -435,16 +470,16 @@ export default function Page() {
 
     const timer = new THREE.Timer();
 
-    // let lastTime = 0;
-    // let frameCount = 0;
+    let lastTime = 0;
+    let frameCount = 0;
     const loop = () => {
-      // frameCount++;
-      // const now = performance.now();
-      // if (now - lastTime >= 1000) {
-      //   console.log(`FPS: ${frameCount}`);
-      //   frameCount = 0;
-      //   lastTime = now;
-      // }
+      frameCount++;
+      const now = performance.now();
+      if (now - lastTime >= 1000) {
+        console.log(`FPS: ${frameCount}`);
+        frameCount = 0;
+        lastTime = now;
+      }
 
       timer.update();
       const time = timer.getElapsed();
@@ -473,16 +508,17 @@ export default function Page() {
 
       renderer.setViewport(0, 0, W, H);
       renderer.setScissor(0, 0, W, H);
-      renderer.render(audioObserver.scene, camera);
+      // renderer.render(audioObserver.scene, camera);
+      renderer.render(scene0, camera);
       renderer.setViewport(W, 0, W, H);
       renderer.setScissor(W, 0, W, H);
       renderer.render(scene1, camera);
 
       const vS = useVisualParamsStore.getState();
-      const bpmkickValue = useAudioEventStore.getState().isActive
-        ? useAudioEventStore.getState().bpmKick
-        : 0;
-      // console.log(bpmkickValue);
+      // const bpmkickValue = useAudioEventStore.getState().isActive
+      //   ? useAudioEventStore.getState().bpmKick
+      //   : 0;
+      const bpmkickValue = useAudioEventStore.getState().bpmKick;
       const visualParamsData: OutputVisualParams = {
         stereo: {
           loopNum: vS.stereo.loopNum,
@@ -492,6 +528,7 @@ export default function Page() {
           isPinPong: vS.isPinpong[0],
           isCircleMove: vS.isCircleMove[0],
           isCircleMoveColor: vS.isCircleMoveColor[0],
+          objectType: vS.stereoObjectType,
         },
         mono: {
           loopNum: vS.mono.loopNum,
@@ -501,6 +538,7 @@ export default function Page() {
           isPinPong: vS.isPinpong[1],
           isCircleMove: vS.isCircleMove[1],
           isCircleMoveColor: vS.isCircleMoveColor[1],
+          objectType: vS.monoObjectType,
         },
         layer: vS.layer,
         bpmKick: bpmkickValue,
@@ -508,6 +546,10 @@ export default function Page() {
           isBirdsEye: useBirdsEyeStore.getState().isBirdsEye,
         },
         bpm: useAudioEventStore.getState().bpm,
+      };
+      const spiralData: SpiralInterface = {
+        threshold: useSpiralStore.getState().threshold,
+        morphSpeed: useSpiralStore.getState().speed,
       };
       setVisualParamsData(visualParamsData);
       visualParams.current = visualParamsData;
@@ -525,6 +567,7 @@ export default function Page() {
       channel.postMessage({
         buffers: outputBufferRef.current.slice(),
         visualParamsData,
+        spiralData,
       });
 
       animId = requestAnimationFrame(loop);
@@ -539,92 +582,80 @@ export default function Page() {
     };
   }, [isInit]);
 
-  useEffect(() => {
-    let aniId: number;
-    if (!viewCanvasRef.current || !waveParams.current) return;
+  // useEffect(() => {
+  //   let aniId: number;
+  //   if (!viewCanvasRef.current || !waveParams.current) return;
 
-    const renderer = createRenderer(viewCanvasRef.current);
-    console.log(waveParams.current);
-    // for (let i = 0; i < waveParams.current[0].length; i++) {
-    //   waveParams.current[0][i] = Math.random();
-    // }
-    // for (let i = 1; i < waveParams.current[1].length; i++) {
-    //   waveParams.current[1][i] = Math.random();
-    // }
-    // for (let i = 2; i < waveParams.current[2].length; i++) {
-    //   waveParams.current[2][i] = Math.random();
-    // }
-    console.log(waveParams.current);
+  //   const renderer = createRenderer(viewCanvasRef.current);
 
-    const { stereoVisualObserver, monoVisualObserver } = setObserver(
-      renderer,
-      waveParams.current,
-    );
+  //   const { stereoVisualObserver, monoVisualObserver } = setObserver(
+  //     renderer,
+  //     waveParams.current,
+  //   );
 
-    const clock = new THREE.Clock();
-    let lastTime = 0;
-    let frameCount = 0;
-    let counter = 0;
-    const loop = () => {
-      // console.log(
-      //   visualParams.current?.mono.isCircleMove,
-      //   visualParams.current?.stereo.isCircleMove,
-      // );
-      frameCount++;
-      const now = performance.now();
-      if (now - lastTime >= 1000) {
-        console.log(`FPS: ${frameCount}`);
-        frameCount = 0;
-        lastTime = now;
-      }
-      console.log(visualParams.current);
-      if (waveParams.current) {
-        stereoVisualObserver.update(
-          clock.getElapsedTime(),
-          renderer,
-          [waveParams.current[0], waveParams.current[1]],
-          visualParams.current!.stereo,
-          visualParams.current!.bpmKick,
-          visualParams.current!.bpm,
-        );
-        monoVisualObserver.update(
-          clock.getElapsedTime(),
-          renderer,
-          waveParams.current[2],
-          visualParams.current!.mono,
-          visualParams.current!.bpmKick,
-          visualParams.current!.birdsEye,
-          visualParams.current!.bpm,
-        );
+  //   const clock = new THREE.Clock();
+  //   let lastTime = 0;
+  //   let frameCount = 0;
+  //   let counter = 0;
+  //   const loop = () => {
+  //     // console.log(
+  //     //   visualParams.current?.mono.isCircleMove,
+  //     //   visualParams.current?.stereo.isCircleMove,
+  //     // );
+  //     frameCount++;
+  //     const now = performance.now();
+  //     if (now - lastTime >= 1000) {
+  //       // console.log(`FPS: ${frameCount}`);
+  //       frameCount = 0;
+  //       lastTime = now;
+  //     }
+  //     if (waveParams.current) {
+  //       stereoVisualObserver.update(
+  //         clock.getElapsedTime(),
+  //         renderer,
+  //         [waveParams.current[0], waveParams.current[1]],
+  //         visualParams.current!.stereo,
+  //         visualParams.current!.bpmKick,
+  //         visualParams.current!.bpm,
+  //       );
+  //       // monoVisualObserver.update(
+  //       //   clock.getElapsedTime(),
+  //       //   renderer,
+  //       //   waveParams.current[2],
+  //       //   visualParams.current!.mono,
+  //       //   visualParams.current!.bpmKick,
+  //       //   visualParams.current!.birdsEye,
+  //       //   visualParams.current!.bpm,
+  //       // );
 
-        /*layer pattern */
-        if (counter % 2 === 0) {
-          renderer.setRenderTarget(null);
-          renderer.clear();
-          const pattern = visualParams.current?.layer.pattern;
-          if (pattern === "sm") {
-            monoVisualObserver.render(renderer);
-            stereoVisualObserver.render(renderer);
-          } else if (pattern === "ms") {
-            stereoVisualObserver.render(renderer);
-            monoVisualObserver.render(renderer);
-          } else if (pattern === "s") {
-            stereoVisualObserver.render(renderer);
-          } else if (pattern === "m") {
-            monoVisualObserver.render(renderer);
-          }
-        }
-      }
+  //       /*layer pattern */
+  //       if (counter % 2 === 0) {
+  //         renderer.setRenderTarget(null);
+  //         renderer.clear();
+  //         const pattern = visualParams.current?.layer.pattern;
+  //         if (pattern === "sm") {
+  //           monoVisualObserver.render(renderer);
+  //           stereoVisualObserver.render(renderer);
+  //         } else if (pattern === "ms") {
+  //           stereoVisualObserver.render(renderer);
+  //           monoVisualObserver.render(renderer);
+  //         } else if (pattern === "s") {
+  //           stereoVisualObserver.render(renderer);
+  //         } else if (pattern === "m") {
+  //           monoVisualObserver.render(renderer);
+  //         }
+  //       }
+  //     }
 
-      aniId = requestAnimationFrame(loop);
-      counter++;
-    };
-    loop();
-    return () => {
-      cancelAnimationFrame(aniId);
-      renderer.dispose();
-    };
-  }, [isInit]);
+  //     aniId = requestAnimationFrame(loop);
+  //     counter++;
+  //   };
+  //   loop();
+  //   return () => {
+  //     cancelAnimationFrame(aniId);
+  //     renderer.dispose();
+  //   };
+  // }, [isInit]);
 
   const handleSampleRateChange = async (
     e: React.ChangeEvent<HTMLInputElement>,

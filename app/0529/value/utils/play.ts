@@ -15,8 +15,8 @@ export async function playAudio(
   /* */
   const audioInput = (await navigator.mediaDevices.enumerateDevices())
     .filter((d) => d.kind == "audioinput")
-    .find((d) => d.label.includes("USB Audio Device"));
-  console.log(audioInput);
+    .find((d) => d.label.includes("Steinberg UR22mkII"));
+  // .find((d) => d.label.includes("USB"));
 
   const stream = await navigator.mediaDevices.getUserMedia({
     audio: {

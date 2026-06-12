@@ -2,8 +2,13 @@
 
 import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
-import { monoVisual, stereoVisual } from "./output";
-import { OutputVisualParams, VisualParams } from "./value/utils/interface";
+import { monoVisual } from "./outputs/mono";
+import { stereoVisual } from "./outputs/stereo";
+import {
+  OutputVisualParams,
+  SpiralInterface,
+  VisualParams,
+} from "./value/utils/interface";
 
 export async function setRecorder(canvas: HTMLCanvasElement) {
   const audioCtx = new AudioContext();
@@ -84,6 +89,7 @@ export default function Page() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const waveParams = useRef<waveParams | null>(null);
   const visualParams = useRef<OutputVisualParams | null>(null);
+  const spiralParams = useRef<SpiralInterface | null>(null);
   const [isInit, setIsInit] = useState<boolean>(false);
   const chunkRef = useRef<Blob[]>([]);
   const recorderRef = useRef<MediaRecorder | null>(null);
@@ -96,6 +102,7 @@ export default function Page() {
         texsBuffer: e.data.buffers,
       };
       visualParams.current = e.data.visualParamsData;
+      spiralParams.current = e.data.spiralData;
       // console.log(visualParams.current);
       if (!isInit) setIsInit(true);
     };
@@ -125,7 +132,7 @@ export default function Page() {
       frameCount++;
       const now = performance.now();
       if (now - lastTime >= 1000) {
-        // console.log(`FPS: ${frameCount}`);
+        console.log(`FPS: ${frameCount}`);
         frameCount = 0;
         lastTime = now;
       }
@@ -138,6 +145,8 @@ export default function Page() {
           visualParams.current!.stereo,
           visualParams.current!.bpmKick,
           visualParams.current!.bpm,
+          visualParams.current!.layer,
+          spiralParams.current!,
         );
         monoVisualObserver.update(
           clock.getElapsedTime(),
@@ -147,6 +156,8 @@ export default function Page() {
           visualParams.current!.bpmKick,
           visualParams.current!.birdsEye,
           visualParams.current!.bpm,
+          visualParams.current!.layer,
+          spiralParams.current!,
         );
 
         /*layer pattern */
